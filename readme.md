@@ -18,29 +18,34 @@ Learning to do it yourself is a great approach, and how I came up with the idea 
 
 ### Specific features / planned feature goals
 
-* *Powerful event-delegation API for controlling Python class instances* - The ZSquirrel1 events module defines an interface for controlling instances of your Python classes through linked, deferred method calls. The module and API allows for integration of "event requests" with a flexible syntax that can translate entirely hashable "query" arguments into Event objects for use by the engine's EventHandler class. The event request syntax on its own has built in support for chained method calls, time delays and interpolation, and even conditional behavior. Because queries can be entirely hashable they can easily be imported from a neutral data format and interpreted by the engine.
+* **Powerful event-delegation API for controlling Python class instances** - The ZSquirrel1 events module defines an interface for controlling instances of your Python classes through linked, deferred method calls. The module and API allows for integration of "event requests" with a flexible syntax that can translate entirely hashable "query" arguments into Event objects for use by the engine's EventHandler class. The event request syntax on its own has built in support for chained method calls, time delays and interpolation, and even conditional behavior. Because queries can be entirely hashable they can easily be imported from a neutral data format and interpreted by the engine.
 	* **Estimated progress:** 95%
 
-* *Platform/device-agnostic controller support* - ZSquirrel1 allows for the use of "templates" that are used to build a virtual controller object in Python. The built in utilities provide support for creating a "profile" of input mappings that can be used to control the virtual controller. You should be able to develop your project in such a way that the "player" has maximum flexibility for mapping input devices while your project code itself just works irrespective of what the player has hooked up to their computer.
+* **Platform/device-agnostic controller support** - ZSquirrel1 allows for the use of "templates" that are used to build a virtual controller object in Python. The built in utilities provide support for creating a "profile" of input mappings that can be used to control the virtual controller. You should be able to develop your project in such a way that the "player" has maximum flexibility for mapping input devices while your project code itself just works irrespective of what the player has hooked up to their computer.
 	* **Estimated progress:** 95%
 
-* *Developer-friendly Menu/GUI support* - ZSquirrel1 has built in classes for developing "Menu" and other GUI objects based on minimal specifications by the developer. Project style-sheets can control the look and feel of GUI elements, while the use of the "MenuTools" mini-API provides a straight-forward functional approach to menuing behavior. Also for those with less experience in functional UI programming, a library of pre-built context-sensitive menus can be imported where appropriate and controlled by project configuration files.
+* **Developer-friendly Menu/GUI support** - ZSquirrel1 has built in classes for developing "Menu" and other GUI objects based on minimal specifications by the developer. Project style-sheets can control the look and feel of GUI elements, while the use of the "MenuTools" mini-API provides a straight-forward functional approach to menuing behavior. Also for those with less experience in functional UI programming, a library of pre-built context-sensitive menus can be imported where appropriate and controlled by project configuration files.
 	* **Estimated progress:** 70%
 
-* *Easy Stylesheet/Resource library management* - ZSquirrel1 automatically builds stylesheet and resource-library objects based on config files that allow contextual control of game environments and elements.
+* **Easy Stylesheet/Resource library management** - ZSquirrel1 automatically builds stylesheet and resource-library objects based on config files that allow contextual control of game environments and elements.
 	* **Estimated progress:** 90%
 
-* *Simple custom-implementation of physics / collision regimens* - Project configuration will allow a simple way to effectively customize the physics and collision behaviors of any game environment, even allowing multiple configurations per project in different contexts. In addition to controlling simple environment parameters like gravity and collision elasticity, the API will define a basic set of guidelines for fine tuning the exact implementation of different regimens for handling physics and collisions in different contexts. I.E. should sprites have instantaneous velocities or derive velocity by integrating acceleration forces? Should sprite-sprite collisions employ a certain collision algorithm while sprite-map region collisions use another? Etc.
+* **Simple custom-implementation of physics / collision regimens** - Project configuration will allow a simple way to effectively customize the physics and collision behaviors of any game environment, even allowing multiple configurations per project in different contexts. In addition to controlling simple environment parameters like gravity and collision elasticity, the API will define a basic set of guidelines for fine tuning the exact implementation of different regimens for handling physics and collisions in different contexts. I.E. should sprites have instantaneous velocities or derive velocity by integrating acceleration forces? Should sprite-sprite collisions employ a certain collision algorithm while sprite-map region collisions use another? Etc.
 	* **Estimated progress:** 20%
 
-* *Maximum re-usability of animation / state-machine configurations* - The ZSquirrel1 API will provide a framework for customizing and re-using sprite animation/behavior state logic as well as providing usable examples out of the box that can be customized and applied in a variety of contexts.
+* **Maximum re-usability of animation / state-machine configurations** - The ZSquirrel1 API will provide a framework for customizing and re-using sprite animation/behavior state logic as well as providing usable examples out of the box that can be customized and applied in a variety of contexts.
 	* **Estimated progress:** 0%
 
-* *Layered Game environments with built in scaling/scrolling* - ZSquirrel1 provides source code for game environment objects with built in support of scaled/zoomable displays, as well as a number of scrolling paradigms, including built in parallax/interpolation support.
+* **Layered Game environments with built in scaling/scrolling** - ZSquirrel1 provides source code for game environment objects with built in support of scaled/zoomable displays, as well as a number of scrolling paradigms, including built in parallax/interpolation support.
 	* **Estimated progress:** 10%
 
-* *Dynamic sprite-sheet generation / graphical utilities* - ZSquirrel1 will provide a set of tools for customizing dynamic generation of spritesheets including merging different "layer" graphics and intuitive HSV based controls for palette-shifting. **This feature will probably utilize an outside library and is not yet implemented.**
+* **Dynamic sprite-sheet generation / graphical utilities** - ZSquirrel1 will provide a set of tools for customizing dynamic generation of spritesheets including merging different "layer" graphics and intuitive HSV based controls for palette-shifting. *This feature will probably utilize an outside library and is not yet implemented.*
 	* **Estimated progress:** 0%
 
-* *Integrated support for xml tilemaps* - ZSquirrel will provide basic integration support for the common .tmx format. **This feature will probably utilize an outside library and is not yet implemented.**
+* **Integrated support for xml tilemaps** - ZSquirrel will provide basic integration support for the common .tmx format. *This feature will probably utilize an outside library and is not yet implemented.*
 	* **Estimated progress:** 0%
+
+
+### Known Issues
+
+* Multi-threading needs to be implemented for any GUI elements that call a method with a while loop (TextField objects and the InputMapper class) so as not to break the game engine object's main method while loop.
