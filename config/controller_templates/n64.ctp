@@ -1,0 +1,12 @@
+Button Start
+Button A
+Button B
+Button c_up
+Button c_down
+Button c_left
+Button c_right
+Button L
+Button R
+Button Z
+Dpad dpad
+ThumbStick main

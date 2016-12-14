@@ -1,0 +1,13 @@
+Button Start
+Button Select
+Button A
+Button B
+Button X
+Button Y
+Button L
+Button R
+Dpad dpad
+ThumbStick left_stick
+ThumbStick right_stick
+Trigger left_trigger
+Trigger right_trigger

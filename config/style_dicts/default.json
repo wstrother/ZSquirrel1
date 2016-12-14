@@ -1,0 +1,56 @@
+{
+    "align_h": "l",
+    "align_v": "t",
+    "bg_style": "tile",
+    "border_sides": "tlrb",
+    "border_corners": "abcd",
+    "buffers": {
+        "cell": [5, 5],
+        "text": 5
+    },
+    "colors": {
+        "selected": [
+            0,
+            200,
+            0
+        ],
+        "alpha": [
+            255,
+            0,
+            0
+        ],
+        "bg": [
+            180,
+            30,
+            30
+        ],
+        "unselected": [
+            255,
+            255,
+            255
+        ],
+	"active": [
+	    255,
+	    255,
+	    0
+	],
+        "text": [
+            255,
+            255,
+            255
+        ]
+    },
+    "sounds": {
+	"select": "menu_select.ogg",
+	"activate": "menu_activate.ogg"
+    },
+    "fonts": {
+        "main": "dev_main",
+	"title": "dev_title"},
+    "images": {
+        "bg": "bg.png",
+        "border_corner": "corner.png",
+        "border_h_side": "h_side.png",
+        "border_v_side": "v_side.png"
+    }
+}

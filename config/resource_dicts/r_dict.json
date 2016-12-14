@@ -1,0 +1,28 @@
+{
+  "sounds": [
+    "menu_select.ogg",
+    "menu_activate.ogg"
+  ],
+  "images": [
+    "bg.png",
+    "corner.png",
+    "h_side.png",
+    "v_side.png",
+    "test_bg.png",
+    "test_corner.png",
+    "test_h_side.png",
+    "test_v_side.png"
+  ],
+  "fonts": {
+    "dev_title": [
+      "couriernew",
+      23,
+      "bold"
+    ],
+    "dev_main": [
+      "couriernew",
+      18,
+      "bold"
+    ]
+  }
+}

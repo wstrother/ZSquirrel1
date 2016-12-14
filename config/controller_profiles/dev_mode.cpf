@@ -1,0 +1,66 @@
+{
+  "dpad": {
+    "right": {
+      "mapping": {
+        "map_id": 275,
+        "map_type": "key",
+        "key_name": "right",
+        "name": "button_map"
+      },
+      "name": "Button",
+      "device_name": "right"
+    },
+    "down": {
+      "mapping": {
+        "map_id": 274,
+        "map_type": "key",
+        "key_name": "down",
+        "name": "button_map"
+      },
+      "name": "Button",
+      "device_name": "down"
+    },
+    "name": "Dpad",
+    "up": {
+      "mapping": {
+        "map_id": 273,
+        "map_type": "key",
+        "key_name": "up",
+        "name": "button_map"
+      },
+      "name": "Button",
+      "device_name": "up"
+    },
+    "device_name": "dpad",
+    "left": {
+      "mapping": {
+        "map_id": 276,
+        "map_type": "key",
+        "key_name": "left",
+        "name": "button_map"
+      },
+      "name": "Button",
+      "device_name": "left"
+    }
+  },
+  "b": {
+    "mapping": {
+      "map_id": 98,
+      "map_type": "key",
+      "key_name": "b",
+      "name": "button_map"
+    },
+    "name": "Button",
+    "device_name": "b"
+  },
+  "a": {
+    "mapping": {
+      "map_id": 32,
+      "map_type": "key",
+      "key_name": "space",
+      "name": "button_map"
+    },
+    "name": "Button",
+    "device_name": "a"
+  }
+}
