@@ -15,9 +15,7 @@ start_env = get_environment(START_ENVIRONMENT)
 game = Game(start_env, start_screen, [start_controller], FRAME_RATE)
 
 # sys.stdout = open("output.txt", "w")
-# sys.stderr = open("errors.txt", "w")
 
 game.main()
 
 # sys.stdout.close()
-# sys.stderr.close()

@@ -1,5 +1,5 @@
 import sys
-# import zs_tests.classes_tests as ct
+import zs_tests.classes_tests as ct
 # import zs_tests.events_test as et
 # import zs_tests.graphics_tests as gt
 # import zs_tests.entities_tests as ent
@@ -8,7 +8,7 @@ import sys
 # import zs_tests.controller_tests as cont
 
 sys.stdout = open("output.txt", "w")
-# ct.do_tests()
+ct.do_tests()
 # et.do_tests()
 # gt.do_tests()
 # ent.do_tests()
