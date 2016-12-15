@@ -412,13 +412,18 @@ class Layer(ZsEntity):
         env = self.event.environment
         env.return_to = self
 
-        self.handle_event("die")
-        self.return_to = env
+        transition = ("die",
+                      ("goto", env))
+        self.handle_event(transition)
 
     def on_death(self):
-        if self.return_to:
-            self.transition_to = self.return_to
-            self.return_to = None
+        env = self.event.get(
+            "trigger.trigger.goto")
+        if not env:
+            env = self.return_to
+
+        if env:
+            self.transition_to = env
         else:
                 exit()
 
