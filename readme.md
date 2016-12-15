@@ -2,7 +2,7 @@
 
 "ZSquirrel1" is the name of an open source 2D games API that I am writing in Python 3, currently on a Pygame (SDL) based back end. The "1" on the end is part of the name of the API, not a version number. This is intentional and has no purpose. I hereby publish it under GPL, non-commercial share alike, although stand-alone derivate products (i.e. games or software made using the API) are waived of the non-commercial reservation (Subject to my discretion, ask if you have questions).
 
-This is currently a pre-Alpha build, so some "features" this readme talks about may not be fully implemented at the time you are accessing this repo. I will strive to keep my progress-levels and issues lists up to date as I continue development.
+This is currently a pre-Alpha build, so some features this readme talks about may not be fully implemented at the time you are accessing this repo. I will strive to keep my progress-levels and issues lists up to date as I continue development.
 
 ## What is ZSquirrel1?
 
@@ -18,7 +18,7 @@ Learning to do it yourself is a great approach, and how I came up with the idea 
 
 ### Specific features / planned feature goals
 
-* **Powerful event-delegation API for controlling Python class instances** - The ZSquirrel1 events module defines an interface for controlling instances of your Python classes through linked, deferred method calls. The module and API allows for integration of "event requests" with a flexible syntax that can translate entirely hashable "query" arguments into Event objects for use by the engine's EventHandler class. The event request syntax on its own has built in support for chained method calls, time delays and interpolation, and even conditional behavior. Because queries can be entirely hashable they can easily be imported from a neutral data format and interpreted by the engine.
+* **Powerful event-delegation API for controlling Python class instances** - The ZSquirrel1 events module defines an interface for controlling instances of your Python classes through chainable, deferred method calls. The module and API allows for integration of "event requests" with a flexible syntax that can translate entirely hashable "query" arguments into Event objects for use by the engine's EventHandler class. The event request syntax on its own has built in support for chained method calls, time delays and interpolation, and even conditional behavior. Because queries can be entirely hashable they can easily be imported from a neutral data format and interpreted by the engine.
 	* **Estimated progress:** 95%
 
 * **Platform/device-agnostic controller support** - ZSquirrel1 allows for the use of "templates" that are used to build a virtual controller object in Python. The built in utilities provide support for creating a "profile" of input mappings that can be used to control the virtual controller. You should be able to develop your project in such a way that the "player" has maximum flexibility for mapping input devices while your project code itself just works irrespective of what the player has hooked up to their computer.
