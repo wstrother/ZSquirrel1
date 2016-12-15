@@ -20,7 +20,7 @@ class MeterUnitTest(ZsUnitTest):
                     args = value, maximum, minimum
                     l(self.get_meter_str(args))
 
-                    if maximum <= minimum:
+                    if maximum < minimum:
                         self.test_bad_init_args(args)
                     else:
                         if minimum <= value <= maximum:
@@ -53,7 +53,13 @@ class MeterUnitTest(ZsUnitTest):
         assert meter.get_span() == maximum - minimum
         l("get_span ok")
 
-        assert meter.get_ratio() == (value - minimum) / (maximum - minimum)
+        error_caught = False
+        try:
+            assert meter.get_ratio() == (value - minimum) / (maximum - minimum)
+        except ArithmeticError:
+            error_caught = True
+        if meter.get_span() == 0:
+            assert error_caught
         l("get_ratio ok")
 
         assert meter.is_empty() == (value == minimum)
@@ -405,14 +411,8 @@ class ClockUnitTest(ZsUnitTest):
 
         for name in name_list:
             clock.remove_timer(name)
-        assert clock.queue == []
-        l("remove_timers on queue list ok")
-
-        clock.timers = timer_list
-        for name in name_list:
-            clock.remove_timer(name)
-        assert clock.timers == []
-        l("remove_timers on timers list ok")
+        assert set(clock.to_remove) == set(timer_list)
+        l("remove_timers ok")
 
 
 class MemberTableUnitTest(ZsUnitTest):
@@ -457,7 +457,7 @@ class MemberTableUnitTest(ZsUnitTest):
         for x in range(0, len(members)):
             member = randint(1, x + 2)
 
-            table.add_member(member, x, x)
+            table.add_member(member, (x, x))
             assert table.members[x][x] == member
             l("add member {} at row: {}, cell: {} ok".format(member, x, x))
         l(self.get_member_str(table.members))

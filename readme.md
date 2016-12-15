@@ -49,3 +49,9 @@ Learning to do it yourself is a great approach, and how I came up with the idea 
 ### Known Issues
 
 * Multi-threading needs to be implemented for any GUI elements that call a method with a while loop (TextField objects and the InputMapper class) so as not to break the game engine object's main method while loop.
+
+* **Tests**:
+	* **events**: EventListener, and ConditionalListener need unit test methods.
+	* **style**: Style module needs all unit tests redone.
+	* **animations, gui, menus, menus_gui, physics, resourcelibrary**: all need suitable unit or integration test procedures
+	* all testing modules should be re-written to ensure better interface clarity

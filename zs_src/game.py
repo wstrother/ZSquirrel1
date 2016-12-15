@@ -38,10 +38,6 @@ class Game:
         for controller in environment.controllers:
             controller.update()
 
-        # cont = environment.controllers[0]
-        # if cont.devices["a"].held:
-        #     self.screen.fill((0, 0, 0))
-        #     environment.main(dt, self.screen)
         self.screen.fill((0, 0, 0))
         environment.main(dt, self.screen)
 

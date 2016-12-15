@@ -491,8 +491,8 @@ class ZsSprite(ZsEntity, Sprite, metaclass=SpawnMetaclass):
     def reset_death(self, trigger=None):
         super(ZsSprite, self).reset_death(trigger)
 
-        # for sprite in self.sub_sprites:
-        #     sprite.reset_death()
+        for sprite in self.sub_sprites:
+            sprite.reset_death()
 
     def on_spawn(self):
         super(ZsSprite, self).on_spawn()

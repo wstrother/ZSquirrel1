@@ -1,5 +1,4 @@
 from zs_tests.zs_unit_test import ZsUnitTest
-from launch_controller import FrameSlice, Command, Step
 from zs_src.controller import ZsController, FrameSlice, Command, Step
 from random import randint, seed
 from collections import OrderedDict
@@ -430,15 +429,6 @@ class ZsControllerUnitTest(ZsUnitTest):
 
         name = "test controller"
         controller = ZsController(name)
-
-        # UPDATE BUTTONS TEST
-
-        controller.buttons = buttons
-        controller.update_buttons()
-
-        for button in controller.buttons:
-            assert any([button.on_up_calls, button.on_down_calls])
-        l("update_buttons ok")
 
         # UPDATE DEVICES TEST
 

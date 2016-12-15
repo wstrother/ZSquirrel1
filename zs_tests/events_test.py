@@ -1,4 +1,4 @@
-from zs_src.events import Event, Action, EventListener, EventPasser, EventHandler, ZsEventInterface
+from zs_src.events import Event, Action, EventListener, EventHandler, ZsEventInterface
 from random import seed, randint, random
 from zs_tests.zs_unit_test import ZsUnitTest
 
@@ -103,12 +103,17 @@ class ActionUnitTest(EventUnitTest):
         def __init__(self):
             self.events_handled = []
             self.actions_handled = []
+            self.event_handler = self.MockEventHandler(self)
 
         def handle_event(self, event):
             self.events_handled.append(event)
 
-        def handle_action(self, action):
-            self.actions_handled.append(action)
+        class MockEventHandler:
+            def __init__(self, mock_target):
+                self.target = mock_target
+
+            def handle_action(self, action):
+                self.target.actions_handled.append(action)
 
     def do_tests(self, r=5):
         l = self.log
@@ -135,10 +140,11 @@ class ActionUnitTest(EventUnitTest):
         l("!m", self.test_init_args)
 
         es = self.get_event_str(args)
-        event = Event.interpret(args)
         target = self.MockTarget()
+        args.append(("target", target))
+        event = Event.interpret(args)
 
-        action = Action(target, event)
+        action = Action(event)
         assert action.maximum == 1
         l("duration ok")
 
@@ -157,10 +163,9 @@ class ActionUnitTest(EventUnitTest):
         l = self.log
         l("!m", self.test_action_methods)
 
-        es = self.get_event_str(args)
-        event = Event.interpret(es)
-        target = self.MockTarget()
-        action = Action(target, event)
+        target = args[-1][1]
+        event = Event.interpret(args)
+        action = Action(event)
 
         # start
         action.start()
@@ -171,7 +176,7 @@ class ActionUnitTest(EventUnitTest):
         # chain_actions
         chain = []
         for i in range(5):
-            link = Action(self.MockTarget(), Event("test_event"))
+            link = Action(Event("test_event", target=self.MockTarget()))
             chain.append(link)
         action.chain_actions(*chain)
 
@@ -190,50 +195,6 @@ class ActionUnitTest(EventUnitTest):
         action.on_switch_off()
         assert action.link in action.link.target.actions_handled
         l("on_switch_off ok")
-
-
-class EventListenerUnitTest(ActionUnitTest):
-    def do_tests(self, r=5):
-        l = self.log
-        l("!s", EventListener)
-
-        get_event = Event.interpret
-        r_event = get_event(self.get_event_args(r))
-        target = self.MockTarget()
-        r_action = Action(target, r_event)
-
-        listener = EventListener("test_event", r_action)
-        assert listener.hear(Event("test_event"))
-        l("hear event ok")
-
-        assert listener.response in target.actions_handled
-        l("on_match ok")
-
-        assert listener.get_response_name() == r_action.name
-        l("get_response_name ok")
-
-        l("! ")
-
-
-class EventPasserUnitTest(ActionUnitTest):
-    def do_tests(self, r=5):
-        l = self.log
-        l("!s", EventPasser)
-
-        target = self.MockTarget()
-        passer = EventPasser("test_event", target)
-        event = Event("test_event")
-
-        assert passer.hear(event)
-        l("hear event ok")
-
-        assert event in target.events_handled
-        l("on_match ok")
-
-        assert passer.get_response_name() == "test_event"
-        l("get_response_name ok")
-
-        l("! ")
 
 
 class EventHandlerUnitTest(EventUnitTest):
@@ -257,7 +218,8 @@ class EventHandlerUnitTest(EventUnitTest):
     class MockListener:
         def __init__(self, name, response_name, temp=False):
             self.name = name
-            self.get_response_name = lambda: response_name
+            self.trigger = name
+            self.response_name = response_name
             self.events_heard = []
             self.temp = temp
 
@@ -269,7 +231,7 @@ class EventHandlerUnitTest(EventUnitTest):
             return heard
 
         def __repr__(self):
-            n, r, t = self.name, self.get_response_name(), self.temp
+            n, r, t = self.name, self.response_name, self.temp
             return "{} / {} temp = {}".format(n, r, t)
 
     class MockClock:
@@ -376,7 +338,7 @@ class EventHandlerUnitTest(EventUnitTest):
 
             match_list = [li for li in listeners if li.name == char]
             for listener in match_list:
-                assert (listener.get_response_name() == "a") == (listener not in eh.listeners)
+                assert (listener.response_name == "a") == (listener not in eh.listeners)
         l("remove_listeners with response_name arg ok")
         eh.listeners = []
 
@@ -485,10 +447,6 @@ class ZsEventInterfaceUnitTest(EventHandlerUnitTest):
         assert "test_event" in eh.events_handled
         l("handle_event ok")
 
-        ei.handle_action(self.MockAction("test_action"))
-        assert "test_action" in eh.actions_handled
-        l("handle_action ok")
-
         ei.add_event_methods(*"abc")
         for char in "abc":
             assert char in eh.event_methods
@@ -542,11 +500,11 @@ class ZsEventInterfaceUnitTest(EventHandlerUnitTest):
             event_name, response_name, target, temp = entries[x]
             listener = eh.listeners[x]
 
-            assert listener.name == event_name
-            assert listener.get_response_name() == response_name
+            assert listener.trigger == event_name
+            assert listener.response_name == response_name
             assert listener.response.target is target
             assert listener.temp == temp
-            l("listener for {} added ok".format(listener.name))
+            l("listener for {} added ok".format(listener.trigger))
         l("set_event_listener ok")
 
         eh.listeners = []
@@ -563,10 +521,10 @@ class ZsEventInterfaceUnitTest(EventHandlerUnitTest):
             event_name, target, temp = entries[x]
             listener = eh.listeners[x]
 
-            assert listener.name == event_name
+            assert listener.trigger == event_name
             assert listener.target == target
             assert listener.temp == temp
-            l("event_passer for {} added ok".format(listener.name))
+            l("event_passer for {} added ok".format(listener.trigger))
         l("set_event_passer ok")
 
         ei.remove_event_listener("test_event", "test_response")
@@ -574,8 +532,8 @@ class ZsEventInterfaceUnitTest(EventHandlerUnitTest):
         l("remove_listener ok")
 
 TESTS = (
-    EventUnitTest, ActionUnitTest, EventListenerUnitTest,
-    EventPasserUnitTest, EventHandlerUnitTest, ZsEventInterfaceUnitTest
+    EventUnitTest, ActionUnitTest,
+    EventHandlerUnitTest, ZsEventInterfaceUnitTest
 )
 
 

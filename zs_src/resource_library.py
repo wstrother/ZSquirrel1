@@ -2,6 +2,7 @@ from os.path import join
 from zs_constants.paths import IMAGES, SOUNDS
 import pygame
 
+pygame.init()
 load_image = pygame.image.load
 load_sound = pygame.mixer.Sound
 

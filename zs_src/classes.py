@@ -125,6 +125,8 @@ class StateMeter(Meter):
     """
     def __init__(self, name, states):
         maximum = len(states) - 1
+        if maximum < 1:
+            raise ValueError("Empty states list passed")
         super(StateMeter, self).__init__(name, 0, maximum=maximum)
         self._states = states
 
@@ -250,7 +252,7 @@ class Clock:
             if not match:
                 to_remove.append(t)
 
-        self.to_remove = to_remove
+        self.to_remove += to_remove
 
     def tick(self, dt):
         for timer in self.queue:            # add queued timers and

@@ -3,10 +3,8 @@ from zs_src.style import Style, StyleInterface
 from random import randint, seed
 from os.path import join
 
-IMAGE_PATH = join("resources", "images")
-SOUND_PATH = join("resources", "sounds")
 
-
+'''
 class StyleUnitTest(ZsUnitTest):
     @staticmethod
     def get_char():
@@ -20,20 +18,14 @@ class StyleUnitTest(ZsUnitTest):
         seed(r)
 
         s = Style()
-        assert s.image_path == IMAGE_PATH
-        l("image_path ok")
-
-        assert s.sound_path == SOUND_PATH
-        l("sound_path ok")
-
         error_caught = False
         try:
-            s.change_dict({Style.K_BG_STYLE: "error"})
+            s.change_dict({"bg_style": "error"})
         except ValueError:
             error_caught = True
         assert error_caught
         l("change_dict value error caught ok")
-        s.change_dict({Style.K_BG_STYLE: "tile"})
+        s.change_dict({"bg_style": "tile"})
 
         alpha = Style.COLORS[4]
         d = {
@@ -166,3 +158,4 @@ TESTS = StyleUnitTest, StyleInterfaceUnitTest
 def do_tests():
     for t in TESTS:
         t().do_tests()
+'''

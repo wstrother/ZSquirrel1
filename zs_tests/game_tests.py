@@ -21,22 +21,25 @@ class GameUnitTest(ZsUnitTest):
             def get_inputs(self):
                 self.get_inputs_called = True
 
+            def update(self, *args):
+                self.get_inputs()
+
         class MockEnvironment:
-            def __init__(self, controller):
-                self.controllers = [controller]
+            def __init__(self):
+                self.controllers = []
                 self.main_called = False
                 self.transition_to = None
 
             def main(self, dt, screen):
                 self.main_called = dt, screen
 
+            def reset_spawn(self):
+                pass
+
         fr = 60
         cont = MockController()
-        env, scr = MockEnvironment(cont), MockScreen()
-        g = Game(env, scr, fr)
-
-        assert g.environment is env
-        l("environment ok")
+        env, scr = MockEnvironment, MockScreen()
+        g = Game(env, scr, [cont], fr)
 
         assert g.screen is scr
         l("screen ok")
@@ -45,14 +48,14 @@ class GameUnitTest(ZsUnitTest):
         l("frame_rate ok")
 
         g.main_routine()
-        assert env.main_called == (1, scr)
+        assert g.environment.main_called == (1, scr)
         assert cont.get_inputs_called
         l("main_routine ok")
 
-        env.transition_to = "test"
+        t = MockEnvironment()
+        g.environment.transition_to = t
         g.main_routine()
-        assert g.environment == "test"
-        assert env.transition_to is None
+        assert g.environment is t
         l("transition ok")
 
         l("! ")

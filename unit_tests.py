@@ -8,7 +8,6 @@ import sys
 # import zs_tests.controller_tests as cont
 
 sys.stdout = open("output.txt", "w")
-sys.stderr = open("errors.txt", "w")
 # ct.do_tests()
 # et.do_tests()
 # gt.do_tests()
@@ -17,5 +16,4 @@ sys.stderr = open("errors.txt", "w")
 # gamt.do_tests()
 # cont.do_tests()
 
-sys.stdout.close()
-sys.stderr.close()
+# sys.stdout.close()

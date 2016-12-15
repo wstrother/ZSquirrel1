@@ -56,25 +56,26 @@ class GraphicsUnitTest(ZsUnitTest):
         l("!s", Graphics)
 
         entity = self.MockEntity("test")
-        img_set = self.MockImageSet("test")
-        gfx = Graphics(entity, img_set)
+        gfx = Graphics(entity)
 
         assert gfx.entity is entity
         assert gfx.name == entity.name
         assert gfx.id_num == entity.id_num
         l("entity ok")
 
-        assert gfx.image_sets["test"] is img_set
+        gfx.add_image_set("default", "abcdefg")
+        assert gfx.image_sets["default"].get_image() == "a"
         l("add_image_sets ok")
 
+        img_set = gfx.image_sets["default"]
         assert gfx.get_image_set() is img_set
         l("get_image_set ok")
 
-        assert gfx.get_image() == "test"
+        assert gfx.get_image() == "a"
         l("get_image ok")
 
         gfx.update()
-        assert img_set.frame > 0
+        assert img_set.current_frame == 1
         l("update ok")
         l("! ")
 
