@@ -159,11 +159,9 @@ class Menu(Layer):
         block.set_event_listener("return", "die", block, temp=True)
 
         conditional = "do_response"
-
-        get_text = lambda e: e.get("trigger.text")
         change_dialog = ("change_value",
                          ("value_name", "dialog"),
-                         ("get_value", get_text))
+                         ("get_value", lambda e: e.get("trigger.text")))
         block.set_event_conditional(
             "return", [conditional], change_dialog,
             self.model, temp=True)

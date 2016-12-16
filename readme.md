@@ -55,3 +55,5 @@ Learning to do it yourself is a great approach, and how I came up with the idea 
 	* **style**: Style module needs all unit tests redone.
 	* **animations, gui, menus, menus_gui, physics, resourcelibrary**: all need suitable unit or integration test procedures
 	* all testing modules should be re-written to ensure better interface clarity
+
+* **Refactoring**: in zs_src the classes.Clock and events.EventHandler could probably stand to be refactored to clean up the way they regulate adding/removing timers and event_listeners respectively. The main gotcha is bugs that can occur if items are added or removed to the relevant list attributes while the for loop in tick() and handle_event() respectively are executing. 

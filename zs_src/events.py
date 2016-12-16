@@ -3,16 +3,17 @@ from zs_src.classes import Timer, Clock
 
 class Event:
     """
-    An Event object is a request for a future, abstract method call of
-    a certain 'name'. The 'trigger' attribute is a place holder for a
-    reference to another Event when heard by an EventListener object.
-    It also has a list of handlers for each EventHandler that it is
-    passed to in a call to EventHandler.handle_event()
+    An Event object is a request for a method call that can be applied
+    to any entity that extends the ZsEventInterface class (all the base
+    classes in zs_src.entities). The 'name' of the event will typically
+    map to a method of the form 'object.on_event_name' and the event object
+    itself will typically be assigned to the object's 'event' attribute
+    for reference by the method.
 
-    Any arbitrary dictionary of keywords can be passed to an Event on
-    initialization unless they use an attribute name that is already
-    taken. The Event.interpret() method can be used to turn a variety
-    of simplified argument formats into an Event object
+    An arbitrary number of keyword arguments can be passed that will assign
+    to the Event's __dict__ attribute, and can thus be referenced like a normal
+    attribute of that name. However, certain names are reserved and will raise
+    an error if they are passed as a keyword argument.
     """
     ID_NUM = 0
     RESERVED = "timer", "handlers", "name", "id_num"
@@ -21,14 +22,18 @@ class Event:
         self.name = name
         self.id_num = Event.get_id()
 
-        if "trigger" not in kwargs:
-            self.trigger = None
-        self.timer = None
-        self.handlers = []
+        self.timer = None       # typically these attributes are all assigned
+        self.handlers = []      # dynamically by an Action or EventHandler object
+
+        # 'trigger' attribute is normally assigned by an EventListener
+        if "trigger" not in kwargs:  # the trigger object can be passed manually
+            self.trigger = None      # but should only reference another Event object
 
         for key in kwargs:
-            if key not in self.__dict__:
+            if key not in self.RESERVED:
                 self.__dict__[key] = kwargs[key]
+            else:
+                raise ValueError("reserved key in kwargs '{}'".format(key))
 
     def __repr__(self):
         s = "{}_{}"
@@ -44,16 +49,16 @@ class Event:
 
     # this method returns default if the attribute name is not in the
     # dictionary. The attributes of the "trigger" event can be
-    # referenced by including "trigger." at the beginning of the
-    # key string.
+    # referenced by including 'trigger.' at the beginning of the
+    # key string, including multiple recursive calls such as
+    # 'trigger.trigger.key'
     def get(self, key, default=None):
         if key.split(".")[0] == "trigger":
             new_key = ".".join(key.split(".")[1:])
             if self.trigger:
                 return self.trigger.get(new_key, default)
             else:
-                return False        # returns False if event has no trigger
-
+                return default
         else:
             return self.__dict__.get(key, default)
 
@@ -61,7 +66,7 @@ class Event:
         if key not in Event.RESERVED:
             self.__dict__[key] = value
         else:
-            raise ValueError
+            raise ValueError("reserved key '{}'".format(key))
 
     @staticmethod
     def string_to_number(s):
@@ -109,7 +114,7 @@ class Event:
     # a number of simplified initializing argument formats.
     # the name and all keys should be strings as they represent
     # attribute names. If an Event object is passed it will be
-    # returned
+    # returned with no in place modifications
     @staticmethod
     def interpret(args):
         name, kwargs = "", {}
@@ -118,17 +123,16 @@ class Event:
             return args
 
         # string 'name key=value key=value ...'
-        elif type(args) == str:              # if 'arg' is a string
+        elif type(args) == str:
             name, kwargs = Event.str_parse(args)
 
         # dict {"name": name, key: value,...}
-        elif type(args) == dict:                   # 'arg' can be a dict of attributes but
-            name, kwargs = args.pop("name"), args  # must have a 'name' key
+        elif type(args) == dict:
+            name, kwargs = args.pop("name"), args
 
         # tuple (name, (key, value), (key, value),...)
-        elif type(args) == tuple or type(args) == list:  # 'arg' can be a tuple, where the first
-            name, kwargs = args[0], dict(args[1:])       # item is the 'name' value and each
-                                                         # subsequent item is a '(key, value)' tuple
+        elif type(args) == tuple or type(args) == list:
+            name, kwargs = args[0], dict(args[1:])
 
         for key in kwargs:
             if key in Event.RESERVED:
@@ -141,21 +145,29 @@ class Action(Timer):
     """
     An Action object is a type of Timer that pairs an Event object
     with a target object that will handle that event as the Action
-    timer ticks. A method call is made on each tick and when the
-    timer is switched off, an optional 'link' action will start.
+    timer ticks. A call to the event method will be made on each call
+    to tick() and the action is stored in the event's 'timer' attribute,
+    allowing for interpolated effects within the event method.
 
-    Optionally, a 'duration' or 'unit' argument can be passed through
-    the Event object itself, their default values are 1 and 'f' (frame)
+    An optional 'link' attribute defines another action whose 'start()'
+    method will be called when this action's 'on_switch_off()' method is
+    called.
+
+    Optionally, 'duration', 'unit', and 'temp' arguments can be set by
+    the event argument, but will default to '1', 'f' (frame), and 'True'
+    Events passed with no 'target' attribute will cause an AttributeError
+    to be raised
     """
     def __init__(self, event):
         name = event.name
         duration = event.get("duration", 1)
         unit = event.get("unit", "f")
+        temp = event.get("temp", True)
 
-        super(Action, self).__init__(name, duration, unit=unit, temp=True)
+        super(Action, self).__init__(name, duration, unit=unit, temp=temp)
         self.id_num = Event.get_id()
 
-        self.target = event.target
+        self.target = event.target      # Event target object must be set!
         self.event = event
         event.timer = self
         self.link = None
@@ -165,11 +177,16 @@ class Action(Timer):
 
     def start(self):
         self.reset()
-        if self.target is None:
-            print("")
         self.target.event_handler.handle_action(self)
 
-    # pass in actions to chain, in order, to self.chain_actions
+    # this method will automatically chain future Actions to be
+    # started once this action's on_switch_off() method is called.
+    # NOTE: if the initial action's 'temp' flag is set the event_handler's
+    # Clock object will reset the action when on_switch_off() is called,
+    # NOT when the entire chain is completed. To make a chain that loops
+    # itself just pass the initial action as the last argument in the
+    # action chain. This will assign it to the 'link' attribute of the
+    # final action, restarting the loop when completed.
     def chain_actions(self, *actions):
         al = [self] + list(actions)
         for i in range(len(al) - 1):
@@ -186,20 +203,48 @@ class Action(Timer):
 
 
 class EventListener:
+    """
+    The EventListener object is assigned to an EventHandler object and
+    maps a 'trigger' event_name to a target object. An optional 'response_event'
+    can be passed, and it's passage determines a kind of conditional
+    polymorphic behavior. I.E.:
+
+    response_event = Event object:
+    This creates a true 'event listener' that responds to the trigger event by
+    creating an Action object that is handled by the target object.
+    NOTE: This means the response_event will NOT occur on the same frame as the
+    trigger_event! This is important to remember.
+
+    response_event = None:
+    This creates a de facto 'event passer' that responds to the trigger event by
+    passing the very same trigger event object to the target's event_handler.
+    NOTE: This means the target object's event_method will be called immediately
+    after the trigger event is handled (on the same frame)! This is important
+    to remember.
+
+    The 'temp' flag is used by the EventHandler object to determine whether the
+    listener should be removed after it successfully hears an event.
+    NOTE: the 'temp' flag passed to this __init__ method has NO EFFECT on whether
+    the response_event's Action object has it's 'temp' flag set. The Action
+    object's 'temp' flag can be set through the response_event object.
+    """
     def __init__(self, trigger_name, target, response_event=None, temp=False):
         self.trigger = trigger_name
         self.target = target
 
+        # true 'event listener'
         if response_event:
             response_event = Event.interpret(response_event)
             response_event.set("target", target)
             self.response = Action(response_event)
             self.response_name = self.response.name
-            self.on_match = self.do_response
+            self.on_match = self.do_response    # alias 'do_response()' as 'on_match()'
+
+        # 'event passer' object
         else:
             self.response = None
             self.response_name = trigger_name
-            self.on_match = self.pass_event
+            self.on_match = self.pass_event     # alias 'pass_event()' as 'on_match()'
 
         self.temp = temp
 
@@ -217,19 +262,40 @@ class EventListener:
 
         return match
 
+    # the 'on_match()' method is an alias of this method
+    # for true 'event listener' objects
     def do_response(self, event):
         self.response.event.trigger = event
         self.response.start()
 
+    # the 'on_match()' method is an alias of this method
+    # for 'event passer' objects
     def pass_event(self, event):
         self.target.handle_event(event)
 
 
 class ConditionalListener(EventListener):
+    """
+    A ConditionalListener object is a type of event_listener or event_passer
+    such that 'test_match()' only returns True if a set of conditions is met.
+
+    The conditions should be passed as a list where each condition can either be:
+        -A string: the string should name a key to pass to event.get() which will
+    evaluate the bool() function on the output of event.get
+        -A function: the function should take the event as a single argument and
+    return a bool
+
+    The first 'condition' in the 'conditions' list can optionally be a string that
+    assigns to the 'condition_type' attribute, which will determine the way the
+    total output of all conditions is returned. If no such string is included the
+    'condition_type' will default to 'all.'
+
+    The 'condition_type' string can be: 'all', 'any', 'not all', or 'not any'
+    """
     def __init__(self, conditions, *args, **kwargs):
         super(ConditionalListener, self).__init__(*args, **kwargs)
 
-        if conditions[0] in ("all", "any"):
+        if conditions[0].split()[0] in ("all", "any", "not"):
             self.condition_type = conditions.pop(0)
         else:
             self.condition_type = "all"
@@ -241,24 +307,33 @@ class ConditionalListener(EventListener):
 
         tests = []
         for c in self.conditions:
-            if type(c) == str:
-                test = event.get(c) == True
+            if type(c) == str:      # test the bool() value of a given attribute
+                test = bool(event.get(c)) is True
             else:
-                test = c(event)
+                test = c(event)     # function takes event as arg and returns bool
             tests.append(test)
 
         ct = self.condition_type
         if ct == "any":
             return any(tests)
 
-        if ct == "all":
+        elif ct == "all":
             return all(tests)
+
+        elif ct == "not any":
+            return not any(tests)
+
+        elif ct == "not all":
+            return not all(tests)
+
+        else:
+            raise ValueError("Bad condition_type set {}".format(self.condition_type))
 
 
 class EventHandler:
     """
     The EventHandler class creates an object that is composed
-    into ZsEntity objects through the ZsEventInterface. It
+    into all ZsEntity objects through the ZsEventInterface. It
     has a list of EventListener (and subclass) objects and
     a dictionary that maps event_name keys to event_methods.
     """
@@ -290,7 +365,10 @@ class EventHandler:
 
     # NOTE: you can technically use this method to map an event
     # to an unbound method or a method bound to another object
-    # although I haven't thought of a use for this
+    # although this functionality doesn't seem very useful to me
+    # at the moment, especially because the handle_event() method
+    # will NOT assign the event to anything, meaning the method
+    # cannot reference the event
     def set_event_method(self, event_name, method):
         self.event_methods[event_name] = method
 
@@ -306,10 +384,13 @@ class EventHandler:
     # an optional response_name argument.
     def remove_listener(self, event_name, response_name=None):
         if response_name:
-            match = lambda l: (l.trigger == event_name and l.response_name == response_name)
+            def match(l):
+                return l.trigger == event_name and l.response_name == response_name
             nl = [l for l in self.listeners if not match(l)]
+
         else:
-            match = lambda l: l.trigger == event_name
+            def match(l):
+                return l.trigger == event_name
             nl = [l for l in self.listeners if not match(l)]
         self.listeners = nl
 
@@ -324,7 +405,7 @@ class EventHandler:
         if name in self.event_methods:
             method = self.event_methods[name]       # before the matching event_method is
             if hasattr(method, "__self__"):         # called, the bound object (if it is a
-                method.__self__.event = event       # bound method) will have it's 'event'
+                method.__self__.event = event       # bound method) will have its 'event'
             self.event_methods[name]()              # attribute set to reference the event
 
         for l in self.listeners:
@@ -341,31 +422,51 @@ class EventHandler:
 
 class ZsEventInterface:
     """
-    The ZsEventInterface is a mixin class used to provide an API frontend
+    The ZsEventInterface is a parent class used to provide an API frontend
     for using the zs_src.events module without directly importing the classes.
 
     The ZsEntity object is given an EventHandler object and 'event' attribute.
-    Any object using this interface can reference the event attribute in event_methods
-    for access to the event that was handled.
+    Any object using this interface can reference the event attribute in
+    event_methods for access to the event that was handled. It can also add
+    or remove event_methods and listeners.
+
+    NOTE: Remember that event_methods must be 'registered' by the EventHandler
+    through the 'add_event_methods()' method, or else the event_method
+    WILL NOT BE CALLED! This is the first thing to check when debugging event
+    behavior that isn't working right.
+
+    However, this is not an oversight. The EventHandler needs a way to
+    dynamically add or remove event_methods so the relevant behaviors can be
+    turned on or off at runtime. This is extremely important for programming
+    game logic in the ZSquirrel1 API.
     """
     def __init__(self, name):
         self.event_handler = EventHandler(name)
         self.event = None
 
-    """
-    The following methods provide convenient and direct ways to interface with
-    the EventHandler object. All of the 'event' arguments can be passed in any
-    valid format that Event.interpret() can take.
-    """
-    def handle_event(self, event):
-        self.event_handler.handle_event(event)
-
+    # The following methods provide convenient and direct ways to interface with
+    # the EventHandler object. All of the 'response' arguments can be passed in
+    # any valid format that Event.interpret() can take.
     def add_event_methods(self, *event_names):
         self.event_handler.add_event_methods(self, *event_names)
 
     def remove_event_methods(self, *event_names):
         self.event_handler.remove_event_methods(*event_names)
 
+    # NOTE: calling the 'handle_event' method is exactly the same as calling
+    # the bound event_method directly, after creating an event object and
+    # assigning it to the object's 'event' attribute. I DO NOT RECOMMEND
+    # ever doing this, but the point is that the event_method is called
+    # immediately, not on the next frame.
+    def handle_event(self, event):
+        self.event_handler.handle_event(event)
+
+    # NOTE: It's important to understand the difference between the
+    # 'queue_events()' method and 'handle_event()', namely: if you pass
+    # a single event to 'queue_events()' it will be composed into an Action
+    # object which is then added to the event_handler's Clock object. I.E.:
+    # the event_method will be called on the next frame, not at the same
+    # stack frame where 'queue_events()' is called.
     def queue_events(self, *events):
         a = []
         for event in events:
@@ -384,27 +485,33 @@ class ZsEventInterface:
         for event_name in event_names:
             self.event_handler.clock.remove_timer(event_name)
 
-    def set_event_listener(self, event_name, response, target=None, temp=False):
+    # NOTE: if no 'target' argument is passed to this method, the default
+    # target will become the entity object itself.
+    def set_event_listener(self, trigger_name, response, target=None, temp=False):
         if not target:
             response = Event.interpret(response)
             target = response.get("target", self)
 
-        listener = EventListener(event_name, target, response, temp=temp)
+        listener = EventListener(trigger_name, target, response, temp=temp)
         self.event_handler.add_listeners(listener)
 
     def set_event_passer(self, event_name, target, temp=False):
         passer = EventListener(event_name, target, temp=temp)
         self.event_handler.add_listeners(passer)
 
-    def set_event_conditional(self, event_name, conditions,
+    # NOTE: if no 'target' argument is passed to this method, the default
+    # target will become the entity object itself.
+    def set_event_conditional(self, trigger_name, conditions,
                               response=None, target=None, temp=False):
         if not target:
             response = Event.interpret(response)
             target = response.get("target", self)
 
-        listener = ConditionalListener(conditions, event_name, target, response, temp=temp)
+        listener = ConditionalListener(
+            conditions, trigger_name, target, response, temp=temp)
         self.event_handler.add_listeners(listener)
 
     def remove_event_listener(self, event_name, response_name=None):
-        self.event_handler.remove_listener(event_name, response_name=response_name)
+        self.event_handler.remove_listener(
+            event_name, response_name=response_name)
 
