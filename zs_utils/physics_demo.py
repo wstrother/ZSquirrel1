@@ -1,10 +1,10 @@
-from zs_src.entities import Layer
-from zs_src.physics import PhysicsSprite, PhysicsLayer, Vector, DrawVectorLayer, DrawHitboxLayer
-from zs_src.gui import TextSprite
-from zs_src.animations import AnimationGraphics
-from zs_constants.zs import SCREEN_SIZE
-
 import pygame
+
+from zs_constants.zs import SCREEN_SIZE
+from zs_src.animations import AnimationGraphics
+from zs_src.entities import Layer
+from zs_src.gui import TextSprite
+from zs_src.physics import PhysicsSprite, PhysicsLayer, Vector, DrawVectorLayer, DrawHitboxLayer
 
 
 class YoshiAnimation(AnimationGraphics):
@@ -117,7 +117,7 @@ class PhysicsDemo(PhysicsLayer):
                         sprite.add_force(Vector("jump", 0, -4))
 
         dpad = cont.devices["dpad"]
-        x, y = dpad.get_direction()
+        x, y = dpad.get_direction_string()
         scale = 1.2
 
         vector = Vector("movement", x * scale, y * scale)
@@ -153,3 +153,6 @@ class PhysicsDemo(PhysicsLayer):
             self.main_sprite.handle_collision)
 
         self.apply_floor()
+
+
+

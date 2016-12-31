@@ -160,7 +160,7 @@ class SwitchOption(TextOption):
         dpad = controller.devices["dpad"]
         button = dpad.get_dominant()
         move = button.check() or button.held > button.init_delay
-        x_direction = dpad.get_direction()[0]
+        x_direction = dpad.get_direction_string()[0]
 
         left = x_direction == -1
         right = x_direction == 1

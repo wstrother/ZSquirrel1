@@ -1,11 +1,12 @@
-from zs_src.menus import Menu
-from zs_src.controller import ZsController
-from zs_constants.paths import CONFIG, CONTROLLER_TEMPLATES, CONTROLLER_PROFILES
 from os import listdir
 from os.path import join
-from update_constants import update_constants
+
 from launch_controller import InputMapper
 from save_controller_profile import save_controller_profile
+from update_constants import update_constants
+from zs_constants.paths import CONFIG, CONTROLLER_TEMPLATES, CONTROLLER_PROFILES
+from zs_src.controller import ZsController
+from zs_src.menus import Menu
 
 CPF, CTP = ".cpf", ".ctp"
 
@@ -112,7 +113,7 @@ class ControllerMenu(Menu):
             edit_template_block, "templates",
             function=option_func)
 
-        template_box = tools.add_sub_box(
+        template_box = tools.make_sub_box(
             edit_template_block, position=(0, 200))
         response = ("update_template_box",
                     ("block", template_box))
@@ -148,7 +149,7 @@ class ControllerMenu(Menu):
             "config block", mb, config_option,
             position=(x, y))
 
-        controllers_box = tools.add_sub_box(
+        controllers_box = tools.make_sub_box(
             config_block, position=(500, 0))
 
         response = (("update_config_block",
@@ -476,7 +477,7 @@ class MakeProfileMenu(Menu):
         mb = tools.make_main_block()
         names = [c[2] for c in self.get_value("template_devices")]
 
-        sb = tools.add_sub_box(mb, position=(300, 0))
+        sb = tools.make_sub_box(mb, position=(300, 0))
 
         def make_sprite(device):
             if device:

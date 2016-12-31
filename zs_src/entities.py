@@ -1,15 +1,13 @@
-from zs_src.classes import StateMeter
-from zs_src.events import ZsEventInterface
-from zs_src.graphics import Graphics
-from zs_constants.zs import SCREEN_SIZE, TRANSITION_TIME
+from sys import exit
+from types import MethodType
 
 from pygame.rect import Rect
 from pygame.sprite import Group, OrderedUpdates, Sprite
 
-from sys import exit
-from types import MethodType
-
-from pygame import transform, Surface, SRCALPHA
+from zs_constants.zs import SCREEN_SIZE, TRANSITION_TIME
+from zs_src.classes import StateMeter
+from zs_src.events import ZsEventInterface
+from zs_src.graphics import Graphics
 
 
 class Model(ZsEventInterface):
@@ -17,7 +15,8 @@ class Model(ZsEventInterface):
         self.name = name
         super(Model, self).__init__(name)
         self.values = {}
-        self.change_methods = {}
+        self.change_functions = {}
+        self.object_listeners = []
 
         if v_dict:
             self.set_values(v_dict)
@@ -32,19 +31,23 @@ class Model(ZsEventInterface):
         for name in v_dict:
             self.values[name] = v_dict[name]
 
-    def link_value(self, value_name, method):
-        self.add_change_method(value_name, method)
+    def link_value(self, value_name, function):
+        self.add_change_functions(value_name, function)
+
+    def link_object(self, obj, value_name, function):
+        l = (obj, value_name, function)
+        self.object_listeners.append(l)
 
     def handle_change(self, value_name):
-        if value_name in self.change_methods:
+        if value_name in self.change_functions:
             value = self.values[value_name]
-            for method in self.change_methods[value_name]:
+            for method in self.change_functions[value_name]:
                 method(value)
 
-    def add_change_method(self, value_name, method):
-        methods = self.change_methods.get(value_name, [])
-        methods.append(method)
-        self.change_methods[value_name] = methods
+    def add_change_functions(self, value_name, function):
+        methods = self.change_functions.get(value_name, [])
+        methods.append(function)
+        self.change_functions[value_name] = methods
 
     def set_value(self, value_name, value):
         self.values[value_name] = value
@@ -97,6 +100,20 @@ class Model(ZsEventInterface):
 
         if not self.event.get("ignore", False):
             self.handle_change(name)
+
+    def update(self, dt):
+        self.event_handler.update(dt)
+
+        self.check_object_listeners()
+
+    def check_object_listeners(self):
+        for l in self.object_listeners:
+            obj, value_name, func = l
+            current = self.values[value_name]
+            value = func(obj)
+
+            if not current == value:
+                self.set_value(value_name, value)
 
 
 class ZsEntity(ZsEventInterface):
@@ -234,9 +251,6 @@ class ZsEntity(ZsEventInterface):
             change_state = "{} state={}".format(name, state)
             self.handle_event(change_state)
 
-    def get_image_state(self):
-        pass
-
     def update(self, dt):
         if self.graphics:
             self.graphics.update()
@@ -345,13 +359,17 @@ class Layer(ZsEntity):
     def add_sub_layer(self, layer):
         self.sub_layers.append(layer)
 
+        layer.model = self.model
+
     def handle_controller(self):
         pass
 
     def get_update_methods(self):
         um = super(Layer, self).get_update_methods()
 
-        return um + [self.update_groups, self.update_sub_layers]
+        return um + [self.update_groups,
+                     self.update_sub_layers,
+                     self.model.update]
 
     def update_groups(self, dt):
         for group in self.groups:
@@ -433,20 +451,6 @@ class Layer(ZsEntity):
         for group in self.groups:
             for sprite in group:
                 sprite.handle_event("die")
-
-
-class Layer2x(Layer):
-    def blit_to_screen(self, screen):
-        w, h = screen.get_size()
-        w /= 2
-        h /= 2
-
-        sub_screen = Surface((w, h), SRCALPHA, 32)
-
-        for item in self.get_draw_order():
-            item.draw(sub_screen)
-        sub_screen = transform.scale2x(sub_screen)
-        screen.blit(sub_screen, (0, 0))
 
 
 class SpawnMetaclass(type):

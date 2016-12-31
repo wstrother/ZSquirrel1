@@ -2,19 +2,18 @@ from pygame import Surface
 from pygame.constants import SRCALPHA
 from pygame.transform import scale, flip
 
+from zs_constants.style import BG_STYLES, BORDER_CORNER_CHOICES, BG, ALPHA
+from zs_constants.zs import TEXT_ANTI_ALIAS, SCREEN_SIZE
 from zs_src.classes import Meter
 from zs_src.style import Style
-from zs_constants.zs import TEXT_ANTI_ALIAS, SCREEN_SIZE
-from zs_constants.style import BG_STYLES, BORDER_SIDE_CHOICES, BORDER_CORNER_CHOICES, BG, ALPHA
 
 
 class ImageSet:
     def __init__(self, name, images):
         self.name = name
+        self.loops = 0
         self.images = None
         self._meter = None
-        self.next = None
-        self.prev = None
 
         if images:
             self.set_images(images)
@@ -34,19 +33,36 @@ class ImageSet:
     def current_frame(self):
         return self._meter.value
 
+    def next_frame(self):
+        v = self.current_frame
+        self._meter.next()
+        dv = self.current_frame - v
+
+        if dv != 1:
+            self.loops += 1
+
     def get_image(self):
         return self.images[self.current_frame]
+
+    def reset(self):
+        self._meter.reset()
+        self.loops = 0
 
 
 class Graphics:
     CLEAR_IMG = Surface((1, 1))
     CLEAR_IMG.set_alpha(255)
 
-    def __init__(self, entity):
+    def __init__(self, entity, get_image_state=None):
         self.name = entity.name
         self.id_num = entity.id_num
         self.entity = entity
         self.image_sets = {}
+
+        if get_image_state:
+            self.get_image_state = get_image_state
+        else:
+            self.get_image_state = lambda: "default"
 
         self.reset_image()
 
@@ -68,21 +84,18 @@ class Graphics:
             return Graphics.CLEAR_IMG
 
     def get_image_set(self):
-        state = self.entity.get_image_state()
+        state = self.get_image_state()
         s = self.image_sets
 
-        if s:
-            if state in s:
-                return s[state]
-            else:
-                return s["default"]
+        if s and state in s:
+            return s[state]
         else:
             return None
 
     def update(self):
         s = self.get_image_set()
         if s:
-            s.next()
+            s.next_frame()
 
     def reset_image(self):
         pass

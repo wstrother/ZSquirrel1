@@ -10,6 +10,8 @@ ANIMATIONS = join(RESOURCES, "animations")
 CONFIG = "config"
 CONTROLLER_PROFILES = join(CONFIG, "controller_profiles")
 CONTROLLER_TEMPLATES = join(CONFIG, "controller_templates")
+STATE_MACHINES = join(CONFIG, "state_machines")
+ANIMATION_STREAMS = join(CONFIG, "animation_streams")
 STYLE_DICTS = join(CONFIG, "style_dicts")
 RESOURCE_DICTS = join(CONFIG, "resource_dicts")
 

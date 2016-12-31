@@ -16,12 +16,12 @@
   "fonts": {
     "dev_title": [
       "couriernew",
-      23,
+      21,
       "bold"
     ],
     "dev_main": [
       "couriernew",
-      18,
+      16,
       "bold"
     ]
   }

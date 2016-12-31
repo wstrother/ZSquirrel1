@@ -1,7 +1,8 @@
-from zs_src.entities import Layer, ZsSprite
-from zs_constants.zs import SCREEN_SIZE
 from math import pi, cos, sin, atan2
+
 from pygame import draw
+
+from zs_src.entities import Layer
 
 
 class Vector:
@@ -122,18 +123,38 @@ class PhysicsLayer(Layer):
         self.gravity = Vector("gravity", 0, g)
         self.friction = (.08, .03)
 
+    def add_hitbox_layer(self, group):
+        self.add_sub_layer(
+            DrawHitboxLayer(group))
+
+    def toggle_hitbox_layer(self):
+        for layer in self.sub_layers:
+            if layer.name == "draw hitbox layer":
+                layer.hide = not layer.hide
+
+    def add_vector_layer(self, group):
+        self.add_sub_layer(
+            DrawVectorLayer(group))
+
+    def toggle_vector_layer(self):
+        for layer in self.sub_layers:
+            if layer.name == "draw vector layer":
+                layer.hide = not layer.hide
+
     def get_draw_order(self):
         order = []
         for layer in self.sub_layers:
             if layer.name == "draw hitbox layer":
-                order.append(layer)
+                if not layer.hide:
+                    order.append(layer)
 
         for group in self.groups:
             order.append(group)
 
         for layer in self.sub_layers:
-            if layer.name != "draw hitbox layer":
-                order.append(layer)
+            if layer.name == "draw vector layer":
+                if not layer.hide:
+                    order.append(layer)
 
         return order
 
@@ -195,7 +216,7 @@ class PhysicsLayer(Layer):
     def apply_gravity(self, dt):
         for group in self.groups:
             for sprite in group:
-                if not sprite.grounded:
+                if not sprite.is_grounded():
                     gravity = self.gravity.get_copy(scale=sprite.mass)
                     sprite.add_force(gravity)
 
@@ -225,10 +246,11 @@ class DrawVectorLayer(Layer):
     def __init__(self, group, **kwargs):
         super(DrawVectorLayer, self).__init__("draw vector layer", **kwargs)
         self.group = group
+        self.hide = False
 
     def draw(self, screen):
         for sprite in self.group:
-            x, y = sprite.collision_region.center
+            x, y = sprite.hitbox.center
             dx, dy = sprite.velocity.get_values()
             dx *= 5
             dy *= 5
@@ -248,120 +270,15 @@ class DrawHitboxLayer(Layer):
     def __init__(self, group, **kwargs):
         super(DrawHitboxLayer, self).__init__("draw hitbox layer", **kwargs)
         self.group = group
+        self.hide = False
 
     def draw(self, screen):
         for sprite in self.group:
-            r = sprite.collision_region
+            r = sprite.hitbox
 
             if hasattr(r, "radius"):
                 draw.circle(screen, (255, 0, 0), r.center, r.radius, 1)
 
             else:
                 draw.rect(screen, (255, 0, 0), r, 1)
-
-
-class PhysicsSprite(ZsSprite):
-    def __init__(self, *args, mass=1, **kwargs):
-        super(PhysicsSprite, self).__init__(*args, **kwargs)
-
-        self.forces = []
-        self.acceleration = Vector("acceleration", 0, 0)
-        self.velocity = Velocity(self.name + " velocity", 0, 0)
-        self.max_i = 20
-        self.max_j = 20
-
-        self.mass = mass
-        self.elasticity = .1
-
-    @property
-    def collision_region(self):
-        return self.rect
-
-    @property
-    def grounded(self):
-        r = self.collision_region
-        y = r.top + r.height
-        grounded = y >= SCREEN_SIZE[1]
-
-        return grounded
-
-    def add_force(self, vector):
-        self.forces.append(vector)
-
-    def apply_acceleration(self):
-        self.acceleration = self.velocity.integrate_acceleration(*self.forces)
-        self.forces = []
-
-    def apply_velocity(self):
-        if self.max_i and self.max_j:
-            self.velocity.cap_values(self.max_i, self.max_j)
-
-        scalar = 1 / self.mass
-        movement = self.velocity.get_copy(scale=scalar)
-        self.position = movement.apply_to_point(self.position)
-
-    def apply_friction(self, coefficients):
-        ground_cf, air_cf = coefficients
-        i, j = self.velocity.get_values()
-
-        j_cf = air_cf
-        if not self.grounded:
-            i_cf = air_cf
-        else:
-            i_cf = ground_cf
-
-        i_value = (i_cf * i) * -1
-        j_value = (j_cf * j) * -1
-        friction = Vector("friction", i_value, j_value)
-
-        self.velocity.add(friction)
-
-    @staticmethod
-    def handle_collision(self, sprite):
-        r1 = self.collision_region
-        x1, y1 = r1.center
-
-        r2 = sprite.collision_region
-        x2, y2 = r2.center
-
-        dx = 0
-        dy = 0
-
-        # r2 above r1
-        above = r2.bottom > r1.top and y2 < y1
-        if above:
-            # print("above")
-            dy = r2.bottom - r1.top
-
-        # r2 below r1
-        below = r2.top < r1.bottom and y2 > y1
-        if below:
-            # print("below")
-            dy = -1 * (r1.bottom - r2.top)
-
-        # r2 left of r1
-        left = r2.right > r1.left and x2 < x1
-        if left:
-            # print("left")
-            dx = r2.right - r1.left
-
-        # r2 right of r1
-        right = r2.left < r1.right and x2 > x1
-        if right:
-            # print("right")
-            dx = -1 * (r1.right - r2.left)
-
-        elasticity = (self.elasticity + sprite.elasticity) / 2
-        push_out = Vector("collision", dx, dy).scale(.5).scale(1 - elasticity)
-        # theta = push_out.get_angle()
-
-        # self.position = push_out.apply_to_point(self.position)
-        # opposite = push_out.get_copy(rotate=.5)
-        # sprite.position = opposite.apply_to_point(sprite.position)
-
-        opposite = push_out.get_copy(rotate=.5)
-
-        self.add_force(push_out)
-        sprite.add_force(opposite)
-
 

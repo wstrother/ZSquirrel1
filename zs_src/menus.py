@@ -1,7 +1,15 @@
 from zs_constants.zs import DIALOG_POSITION
 from zs_src import menus_gui
 from zs_src.entities import Layer
-from zs_src.events import Event
+
+
+class HeadsUpDisplay(Layer):
+    def __init__(self, name, **kwargs):
+        super(HeadsUpDisplay, self).__init__(name, **kwargs)
+
+        self.groups = [self.make_group(True)]
+        self.hud_group = self.groups[0]
+        self.tools = HudTools(self)
 
 
 class Menu(Layer):
@@ -20,13 +28,6 @@ class Menu(Layer):
         self.model.values["dialog"] = ""
         self.tools = MenuTools(self)
 
-    def get_update_methods(self):
-        um = super(Menu, self).get_update_methods()
-
-        um += [self.model.event_handler.update]
-
-        return um
-
     def reset_spawn(self, trigger=None):
         super(Menu, self).reset_spawn(trigger)
 
@@ -43,8 +44,8 @@ class Menu(Layer):
             if ao:
                 ao.queue_events(select)
 
-        self.queue_events(("show_sub_block",
-                           ("block", mb)))
+            self.queue_events(("show_sub_block",
+                               ("block", mb)))
 
     def set_menu_group(self):
         self.groups = [self.make_group(True)]
@@ -188,155 +189,27 @@ class Menu(Layer):
             self.handle_event("die")
 
 
-class MenuTools:
+class HudTools:
     DIALOG_POSITION = DIALOG_POSITION
     TextSprite = menus_gui.TextSprite
-    TextOption = menus_gui.TextOption
-    TextFieldOption = menus_gui.TextFieldOption
-    SwitchOption = menus_gui.SwitchOption
-    CheckBox = menus_gui.CheckBox
-    SubBox = menus_gui.SubBox
-    OptionBlock = menus_gui.OptionBlock
-    DialogBlock = menus_gui.DialogBlock
-    InputBlock = menus_gui.InputBlock
-    FunctionBlock = menus_gui.FunctionBlock
+    ContainerSprite = menus_gui.ContainerSprite
 
-    def __init__(self, menu):
-        self.menu = menu
-        self.model = menu.model
+    def __init__(self, layer):
+        self.layer = layer
 
-    def make_main_block(self, **kwargs):
-        main_block = self.OptionBlock("main block", **kwargs)
-        self.menu.add_main_block(main_block)
+    @property
+    def model(self):
+        return self.layer.model
 
-        return main_block
+    def make_reporter_sprite(self, obj, function, **kwargs):
+        value_name = obj.name
+        self.model.set_value(value_name, "None")
+        self.model.link_object(obj, value_name, function)
 
-    def make_sub_block(self, name, block, option, **kwargs):
-        sub_block = self.OptionBlock(name, **kwargs)
-        self.menu.add_sub_block(block, sub_block, option)
+        ts = self.TextSprite("", **kwargs)
+        self.link_value_to_sprite_text(ts, value_name)
 
-        return sub_block
-
-    def add_sub_box(self, block, members=None, **kwargs):
-        name = block.name + " sub box"
-        sub_box = self.SubBox(self.menu, name, members, **kwargs)
-
-        block.add_sub_sprite(sub_box, self.menu)
-
-        return sub_box
-
-    def make_input_prompt(self, prompt, length, **kwargs):
-        if "position" not in kwargs:
-            kwargs["position"] = DIALOG_POSITION
-
-        input_block = self.InputBlock(
-            prompt, length, **kwargs)
-
-        return input_block
-
-    @staticmethod
-    def make_dialog_box(text, options=None, **kwargs):
-        if "position" not in kwargs:
-            kwargs["position"] = DIALOG_POSITION
-
-        message_box = MenuTools.DialogBlock(
-            text, options,
-            **kwargs)
-
-        return message_box
-
-    def make_text_option(self, text, activation_event=None,
-                         target=None, **kwargs):
-        option = self.TextOption(text, **kwargs)
-        if activation_event:
-            self.set_activation_event(
-                option, activation_event, target)
-
-        return option
-
-    @staticmethod
-    def set_activation_event(option, event, target):
-        option.set_event_listener("activate", event, target)
-
-    def show_dialog_on_activate(self, option, block, response=None,
-                                target=None, conditionals=None):
-        menu = self.menu
-        show_block = ("show_dialog",
-                      ("block", block),
-                      ("response", response),
-                      ("response_target", target),
-                      ("conditionals", conditionals))
-        option.set_event_listener(
-            "activate", show_block, menu)
-        # block.set_event_listener("return", "die")
-
-    def show_input_dialog_on_activate(self, option, prompt, length, response,
-                                      target, conditionals=None, **kwargs):
-        block = self.make_input_prompt(
-            prompt, length, **kwargs)
-
-        self.show_dialog_on_activate(
-            option, block, response,
-            target, conditionals)
-
-    def prompt_for_value_on_activate(self, option, prompt, length,
-                                     value_name, **kwargs):
-        block = self.make_input_prompt(prompt, length, **kwargs)
-
-        def function(event):
-            return block.text
-
-        response = ("change_value",
-                    ("value_name", value_name),
-                    ("get_value", function))
-        self.show_dialog_on_activate(option, block, response, self.model)
-
-    def change_block_on_activate(self, option, block):
-        menu = self.menu
-        show_block = ("show_sub_block",
-                      ("block", block))
-        change_block = ("change_active_block",
-                        ("block", block),
-                        ("to_child", True))
-        self.set_activation_event(
-            option, show_block, menu)
-        self.set_activation_event(
-            option, change_block, menu)
-
-        menu.add_block(block)
-
-    def show_dialog(self, message, options=None, response=None,
-                    conditionals=None, **kwargs):
-        dialog = self.make_dialog_box(
-            message, options, **kwargs)
-
-        show_dialog = ("show_dialog",
-                       ("block", dialog),
-                       ("response", response),
-                       ("conditionals", conditionals))
-        self.menu.queue_events(show_dialog)
-
-    @staticmethod
-    def set_activation_events_for_block(block, function, target):
-        for item in block.member_list:
-            if item.selectable:
-                event = function(item)
-                MenuTools.set_activation_event(item, event, target)
-
-    def link_option_block_to_value(self, block, value_name):
-        model = self.model
-
-        def get_function(event):
-            return block.active_option.text
-
-        change_value = ("change_value",
-                        ("value_name", value_name),
-                        ("get_value", get_function))
-
-        if len(block.members) > 1:
-            block.set_event_listener("change_option", change_value, model)
-            model.set_value(value_name, block.active_option.text)
-        model.handle_change(value_name)
+        return ts
 
     def link_value_to_sprite_members(self, sprite, value_name, function=None):
         model = self.model
@@ -394,15 +267,15 @@ class MenuTools:
         model.link_value(value_name, change_method)
         model.handle_change(value_name)
 
-    def link_value_to_value(self, value_name, value_name2, method=None):
+    def link_value_to_value(self, value_name, value_name2, function=None):
         model = self.model
 
         def change_func(value):
-            if method:
-                value = method(value)
-            self.menu.set_value(value_name2, value)
+            if function:
+                value = function(value)
+            self.layer.set_value(value_name2, value)
             self.handle_change_linked_value(
-                self.menu, value_name, value)
+                self.layer, value_name, value)
 
         model.link_value(value_name, change_func)
 
@@ -412,3 +285,148 @@ class MenuTools:
                   ("value_name", value_name),
                   ("value", value))
         entity.handle_event(change)
+
+
+class MenuTools(HudTools):
+    TextOption = menus_gui.TextOption
+    TextFieldOption = menus_gui.TextFieldOption
+    SwitchOption = menus_gui.SwitchOption
+    CheckBox = menus_gui.CheckBox
+    SubBox = menus_gui.SubBox
+    OptionBlock = menus_gui.OptionBlock
+    DialogBlock = menus_gui.DialogBlock
+    InputBlock = menus_gui.InputBlock
+    FunctionBlock = menus_gui.FunctionBlock
+
+    def make_main_block(self, **kwargs):
+        main_block = self.OptionBlock("main block", **kwargs)
+        self.layer.add_main_block(main_block)
+
+        return main_block
+
+    def make_sub_block(self, name, block, option, **kwargs):
+        sub_block = self.OptionBlock(name, **kwargs)
+        self.layer.add_sub_block(block, sub_block, option)
+
+        return sub_block
+
+    def make_sub_box(self, block, members=None, **kwargs):
+        name = block.name + " sub box"
+        sub_box = self.SubBox(self.layer, name, members, **kwargs)
+
+        block.add_sub_sprite(sub_box, self.layer)
+
+        return sub_box
+
+    def make_input_prompt(self, prompt, length, **kwargs):
+        if "position" not in kwargs:
+            kwargs["position"] = DIALOG_POSITION
+
+        input_block = self.InputBlock(
+            prompt, length, **kwargs)
+
+        return input_block
+
+    @staticmethod
+    def make_dialog_box(text, options=None, **kwargs):
+        if "position" not in kwargs:
+            kwargs["position"] = DIALOG_POSITION
+
+        message_box = MenuTools.DialogBlock(
+            text, options,
+            **kwargs)
+
+        return message_box
+
+    def make_text_option(self, text, activation_event=None,
+                         target=None, **kwargs):
+        option = self.TextOption(text, **kwargs)
+        if activation_event:
+            self.set_activation_event(
+                option, activation_event, target)
+
+        return option
+
+    @staticmethod
+    def set_activation_event(option, event, target):
+        option.set_event_listener("activate", event, target)
+
+    def show_dialog_on_activate(self, option, block, response=None,
+                                target=None, conditionals=None):
+        menu = self.layer
+        show_block = ("show_dialog",
+                      ("block", block),
+                      ("response", response),
+                      ("response_target", target),
+                      ("conditionals", conditionals))
+        option.set_event_listener(
+            "activate", show_block, menu)
+        # block.set_event_listener("return", "die")
+
+    def show_input_dialog_on_activate(self, option, prompt, length, response,
+                                      target, conditionals=None, **kwargs):
+        block = self.make_input_prompt(
+            prompt, length, **kwargs)
+
+        self.show_dialog_on_activate(
+            option, block, response,
+            target, conditionals)
+
+    def prompt_for_value_on_activate(self, option, prompt, length,
+                                     value_name, **kwargs):
+        block = self.make_input_prompt(prompt, length, **kwargs)
+
+        def function(event):
+            return block.text
+
+        response = ("change_value",
+                    ("value_name", value_name),
+                    ("get_value", function))
+        self.show_dialog_on_activate(option, block, response, self.model)
+
+    def change_block_on_activate(self, option, block):
+        menu = self.layer
+        show_block = ("show_sub_block",
+                      ("block", block))
+        change_block = ("change_active_block",
+                        ("block", block),
+                        ("to_child", True))
+        self.set_activation_event(
+            option, show_block, menu)
+        self.set_activation_event(
+            option, change_block, menu)
+
+        menu.add_block(block)
+
+    def show_dialog(self, message, options=None, response=None,
+                    conditionals=None, **kwargs):
+        dialog = self.make_dialog_box(
+            message, options, **kwargs)
+
+        show_dialog = ("show_dialog",
+                       ("block", dialog),
+                       ("response", response),
+                       ("conditionals", conditionals))
+        self.layer.queue_events(show_dialog)
+
+    @staticmethod
+    def set_activation_events_for_block(block, function, target):
+        for item in block.member_list:
+            if item.selectable:
+                event = function(item)
+                MenuTools.set_activation_event(item, event, target)
+
+    def link_option_block_to_value(self, block, value_name):
+        model = self.model
+
+        def get_function(event):
+            return block.active_option.text
+
+        change_value = ("change_value",
+                        ("value_name", value_name),
+                        ("get_value", get_function))
+
+        if len(block.members) > 1:
+            block.set_event_listener("change_option", change_value, model)
+            model.set_value(value_name, block.active_option.text)
+        model.handle_change(value_name)
