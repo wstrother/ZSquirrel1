@@ -1,12 +1,11 @@
 from os import listdir
 from os.path import join
 
-from launch_controller import InputMapper
-from save_controller_profile import save_controller_profile
 from update_constants import update_constants
 from zs_constants.paths import CONFIG, CONTROLLER_TEMPLATES, CONTROLLER_PROFILES
-from zs_src.controller import ZsController
+from zs_src.controller import InputMapper, ZsController
 from zs_src.menus import Menu
+from zs_src.profiles import Profile
 
 CPF, CTP = ".cpf", ".ctp"
 
@@ -431,9 +430,9 @@ class EditTemplateMenu(Menu):
 
 
 class MakeProfileMenu(Menu):
-    def __init__(self, profile, template, **kwargs):
+    def __init__(self, profile_name, template, **kwargs):
         super(MakeProfileMenu, self).__init__("make profile menu", **kwargs)
-        self.profile = profile
+        self.profile_name = profile_name
         self.template = template
 
         path = join(CONTROLLER_TEMPLATES, template + CTP)
@@ -481,7 +480,7 @@ class MakeProfileMenu(Menu):
 
         def make_sprite(device):
             if device:
-                name = device.name
+                name = device["name"]
             else:
                 name = ""
 
@@ -561,18 +560,34 @@ class MakeProfileMenu(Menu):
                 True)
 
     def add_profile_device(self, index, cls, name, *mappings):
-        cls = {"Button": ZsController.Button,
-               "Dpad": ZsController.Dpad,
-               "ThumbStick": ZsController.ThumbStick,
-               "Trigger": ZsController.Trigger}[cls]
-        if len(mappings) == 1:
-            device = cls(name, mappings[0])
-        else:
-            device = cls(name, mappings)
+        mappings = [m.get_profile() for m in mappings]
+
+        device_profile = {"name": name,
+                          "type": cls}
+
+        if cls == "Button":
+            device_profile["mapping"] = mappings[0]
+
+        if cls == "Dpad":
+            i = 0
+            for d in ("up", "down", "left", "right"):
+                button = {"name": "button_map",
+                          "type": "Button",
+                          "mapping": mappings[i]}
+                device_profile[d] = button
+                i += 1
+
+        if cls == "ThumbStick":
+            device_profile["x_axis"] = mappings[0]
+            device_profile["y_axis"] = mappings[1]
+
+        if cls == "Trigger":
+            device_profile["axis"] = mappings[0]
+            device_profile["button"] = mappings[0]
 
         self.set_value_at_index(
             "profile_devices", index,
-            device)
+            device_profile)
 
     def on_map_button(self):
         mapping = self.get_value("dialog")
@@ -674,9 +689,12 @@ class MakeProfileMenu(Menu):
 
     def on_save_profile(self):
         devices = self.get_value("profile_devices")
+        d = {
+            "name": self.profile_name,
+            "devices": [d for d in devices if d]}
+        controller = ZsController(d["name"],
+                                  Profile.make_profile(d))
 
-        devices = [device for device in devices if device]
-        output = []
         try:
             if not devices:
                 raise AssertionError
@@ -689,19 +707,18 @@ class MakeProfileMenu(Menu):
                 if not optional:
                     assert d
 
-                if d:
-                    output.append(d)
         except AssertionError:
             self.tools.show_dialog(
                 "Not all required devices are mapped.")
             return
 
-        file_name = self.profile + CPF
-        save_controller_profile(file_name, devices)
+        controller.save_profile()
 
-        path = join(CONTROLLER_PROFILES, file_name)
+        path = join(CONTROLLER_PROFILES,
+                    self.profile_name + ".cpf")
         self.tools.show_dialog(
-            "Profile {} saved to \n{}".format(self.profile, path))
+            "Profile {} saved to \n{}".format(
+                self.profile_name, path))
 
     def on_clear_mappings(self):
         devices = self.get_value("profile_devices")

@@ -23,6 +23,10 @@ class SelectableInterface:
         else:
             self.active = False
 
+        e = self.event
+        if e and e.name == "activate":
+            e.set("active", self.active)
+
         return self.active
 
     def on_select(self):
@@ -160,7 +164,7 @@ class SwitchOption(TextOption):
         dpad = controller.devices["dpad"]
         button = dpad.get_dominant()
         move = button.check() or button.held > button.init_delay
-        x_direction = dpad.get_direction_string()[0]
+        x_direction = dpad.get_direction()[0]
 
         left = x_direction == -1
         right = x_direction == 1
@@ -275,7 +279,7 @@ class TextField(TextOption):
                                 if alt[i] == letter:
                                     letter = alt_shift[i]
 
-                        self.text += letter
+                        self.change_text(self.text + letter)
                         self.reset_image()
 
             elif event.type == pygame.QUIT:

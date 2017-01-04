@@ -1,66 +1,79 @@
 {
-  "dpad": {
-    "right": {
+  "devices": [
+    {
       "mapping": {
-        "map_id": 275,
+        "name": "button_map",
+        "key_name": "return",
         "map_type": "key",
-        "key_name": "right",
-        "name": "button_map"
+        "map_id": 13
       },
-      "name": "Button",
-      "device_name": "right"
+      "name": "start",
+      "type": "Button"
     },
-    "down": {
-      "mapping": {
-        "map_id": 274,
-        "map_type": "key",
-        "key_name": "down",
-        "name": "button_map"
+    {
+      "right": {
+        "mapping": {
+          "name": "button_map",
+          "key_name": "right",
+          "map_type": "key",
+          "map_id": 275
+        },
+        "name": "right",
+        "type": "Button"
       },
-      "name": "Button",
-      "device_name": "down"
+      "up": {
+        "mapping": {
+          "name": "button_map",
+          "key_name": "up",
+          "map_type": "key",
+          "map_id": 273
+        },
+        "name": "up",
+        "type": "Button"
+      },
+      "left": {
+        "mapping": {
+          "name": "button_map",
+          "key_name": "left",
+          "map_type": "key",
+          "map_id": 276
+        },
+        "name": "left",
+        "type": "Button"
+      },
+      "name": "dpad",
+      "type": "Dpad",
+      "down": {
+        "mapping": {
+          "name": "button_map",
+          "key_name": "down",
+          "map_type": "key",
+          "map_id": 274
+        },
+        "type": "Button",
+        "name": "down"
+      }
     },
-    "name": "Dpad",
-    "up": {
+    {
       "mapping": {
-        "map_id": 273,
+        "name": "button_map",
+        "key_name": "space",
         "map_type": "key",
-        "key_name": "up",
-        "name": "button_map"
+        "map_id": 32
       },
-      "name": "Button",
-      "device_name": "up"
+      "name": "a",
+      "type": "Button"
     },
-    "device_name": "dpad",
-    "left": {
+    {
       "mapping": {
-        "map_id": 276,
+        "name": "button_map",
+        "key_name": "b",
         "map_type": "key",
-        "key_name": "left",
-        "name": "button_map"
+        "map_id": 98
       },
-      "name": "Button",
-      "device_name": "left"
+      "name": "b",
+      "type": "Button"
     }
-  },
-  "b": {
-    "mapping": {
-      "map_id": 98,
-      "map_type": "key",
-      "key_name": "b",
-      "name": "button_map"
-    },
-    "name": "Button",
-    "device_name": "b"
-  },
-  "a": {
-    "mapping": {
-      "map_id": 32,
-      "map_type": "key",
-      "key_name": "space",
-      "name": "button_map"
-    },
-    "name": "Button",
-    "device_name": "a"
-  }
+  ],
+  "name": "dev_mode"
 }

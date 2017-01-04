@@ -115,16 +115,16 @@ class Event:
     # the name and all keys should be strings as they represent
     # attribute names. If an Event object is passed it will be
     # returned with no in place modifications
-    @staticmethod
-    def interpret(args):
+    @classmethod
+    def interpret(cls, args):
         name, kwargs = "", {}
 
-        if type(args) == Event:
+        if type(args) == cls:
             return args
 
         # string 'name key=value key=value ...'
         elif type(args) == str:
-            name, kwargs = Event.str_parse(args)
+            name, kwargs = cls.str_parse(args)
 
         # dict {"name": name, key: value,...}
         elif type(args) == dict:
@@ -135,10 +135,10 @@ class Event:
             name, kwargs = args[0], dict(args[1:])
 
         for key in kwargs:
-            if key in Event.RESERVED:
+            if key in cls.RESERVED:
                 raise ValueError("reserved key in kwargs '{}'".format(key))
 
-        return Event(name, **kwargs)
+        return cls(name, **kwargs)
 
 
 class Action(Timer):
@@ -295,8 +295,9 @@ class ConditionalListener(EventListener):
     def __init__(self, conditions, *args, **kwargs):
         super(ConditionalListener, self).__init__(*args, **kwargs)
 
-        if conditions[0].split()[0] in ("all", "any", "not"):
-            self.condition_type = conditions.pop(0)
+        header = type(conditions[0]) is str
+        if header in ("all", "any", "not all", "not any"):
+                self.condition_type = conditions.pop(0)
         else:
             self.condition_type = "all"
         self.conditions = conditions
@@ -308,7 +309,13 @@ class ConditionalListener(EventListener):
         tests = []
         for c in self.conditions:
             if type(c) == str:      # test the bool() value of a given attribute
+                inverse = False
+                if c[:4] == "not ":
+                    c = c[4:]
+                    inverse = True
                 test = bool(event.get(c)) is True
+                if inverse:
+                    test = not test
             else:
                 test = c(event)     # function takes event as arg and returns bool
             tests.append(test)
@@ -354,11 +361,11 @@ class EventHandler:
     def add_event_methods(self, target, *event_names):
         ok_names = []
         for name in event_names:
-            em = getattr(target, "on_" + name, False)
-            if not em:
-                raise ValueError("no method with 'on_{}' pattern in {}".format(name, target))
-
-            ok_names.append((name, em))
+            em = getattr(target, "on_" + name, None)
+            if em:
+                ok_names.append((name, em))
+            else:
+                print("no on_" + name + " method found for " + target.name)
 
         for name, em in ok_names:
             self.set_event_method(name, em)
@@ -506,6 +513,9 @@ class ZsEventInterface:
         if not target:
             response = Event.interpret(response)
             target = response.get("target", self)
+
+        if not type(conditions) is list:
+            conditions = [conditions]
 
         listener = ConditionalListener(
             conditions, trigger_name, target, response, temp=temp)

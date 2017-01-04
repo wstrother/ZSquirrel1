@@ -25,7 +25,8 @@ class Menu(Layer):
         self.active_block = None
         self.return_block = None
 
-        self.model.values["dialog"] = ""
+        self.model.values["_dialog"] = ""
+        self.model.values["_return"] = ""
         self.tools = MenuTools(self)
 
     def reset_spawn(self, trigger=None):
@@ -53,6 +54,17 @@ class Menu(Layer):
     @property
     def menu_group(self):
         return self.groups[0]
+
+    def get_value_at_index(self, i):
+        name = self.model.value_names[i]
+
+        return self.get_value(name)
+
+    def get_return_value(self):
+        value = self.get_value("_return")
+        self.set_value("_return", None)
+
+        return value
 
     def add_block(self, block):
         for name in Menu.EVENT_NAMES:
@@ -137,6 +149,8 @@ class Menu(Layer):
             block.handle_event("die")
 
     def on_return(self):
+        if self.event.get("value"):
+            self.set_value("return", self.event.value)
         block = self.return_block
 
         if block:
@@ -161,7 +175,7 @@ class Menu(Layer):
 
         conditional = "do_response"
         change_dialog = ("change_value",
-                         ("value_name", "dialog"),
+                         ("value_name", "_dialog"),
                          ("get_value", lambda e: e.get("trigger.text")))
         block.set_event_conditional(
             "return", [conditional], change_dialog,
@@ -185,7 +199,7 @@ class Menu(Layer):
         self.handle_event(change_active_block)
 
     def on_prompt_exit(self):
-        if self.get_value("dialog") == "Yes":
+        if self.get_value("_dialog") == "Yes":
             self.handle_event("die")
 
 
@@ -202,11 +216,11 @@ class HudTools:
         return self.layer.model
 
     def make_reporter_sprite(self, obj, function, **kwargs):
-        value_name = obj.name
+        ts = self.TextSprite("", name=obj.name + " reporter", **kwargs)
+        value_name = "_" + obj.name + str(ts.id_num)
+
         self.model.set_value(value_name, "None")
         self.model.link_object(obj, value_name, function)
-
-        ts = self.TextSprite("", **kwargs)
         self.link_value_to_sprite_text(ts, value_name)
 
         return ts
@@ -227,6 +241,9 @@ class HudTools:
                 members.append(new_row)
 
             sprite.set_table(members)
+            if sprite.active_option:
+                sprite.active_option.queue_events(
+                    "select")
             self.handle_change_linked_value(
                 sprite, value_name, value)
 
@@ -236,7 +253,7 @@ class HudTools:
     def link_value_to_member_column(self, sprite, value_name, function=None):
         model = self.model
 
-        def change_method(value):
+        def change_function(value):
             sprite.clear_members()
             members = []
             for item in value:
@@ -248,24 +265,40 @@ class HudTools:
                     members.append(item)
 
             sprite.set_table(members)
+            if self.layer.active_block is sprite:
+                if sprite.active_option:
+                    sprite.active_option.queue_events(
+                        "select")
             self.handle_change_linked_value(
                 sprite, value_name, value)
 
-        model.link_value(value_name, change_method)
+        model.link_value(value_name, change_function)
         model.handle_change(value_name)
 
     def link_value_to_sprite_text(self, sprite, value_name, function=None):
         model = self.model
 
-        def change_method(value):
+        def change_function(value):
             if function:
                 value = function(value)
             sprite.change_text(value)
             self.handle_change_linked_value(
                 sprite, value_name, value)
 
-        model.link_value(value_name, change_method)
+        model.link_value(value_name, change_function)
         model.handle_change(value_name)
+
+    def link_sprite_text_to_value(self, sprite, value_name, function=None):
+        if not function:
+            def function(x):
+                return x
+
+        change_value = ("change_value",
+                        ("value_name", value_name),
+                        ("get_value", function))
+
+        sprite.set_event_listener(
+            "change_text", change_value, self.model)
 
     def link_value_to_value(self, value_name, value_name2, function=None):
         model = self.model
@@ -409,6 +442,25 @@ class MenuTools(HudTools):
                        ("conditionals", conditionals))
         self.layer.queue_events(show_dialog)
 
+    def set_sub_block_for_options(self, block, function):
+        for o in block.member_list:
+            if o.child:
+                o.child.handle_event("die")
+                o.remove_event_listener("select")
+                o.remove_event_listener("deselect")
+            sb = function(o)
+            self.layer.add_sub_block(block, sb, o)
+
+    def set_auto_sub_block_trigger(self, trigger, block, function):
+        def set_sub_blocks():
+            event_method = getattr(block, "on_" + trigger)
+            event_method()
+            self.set_sub_block_for_options(
+                block, function
+            )
+        block.event_handler.set_event_method(
+            trigger, set_sub_blocks)
+
     @staticmethod
     def set_activation_events_for_block(block, function, target):
         for item in block.member_list:
@@ -426,7 +478,7 @@ class MenuTools(HudTools):
                         ("value_name", value_name),
                         ("get_value", get_function))
 
-        if len(block.members) > 1:
-            block.set_event_listener("change_option", change_value, model)
-            model.set_value(value_name, block.active_option.text)
+        block.set_event_listener("change_option", change_value, model)
+        model.set_value(value_name, block.active_option.text)
         model.handle_change(value_name)
+

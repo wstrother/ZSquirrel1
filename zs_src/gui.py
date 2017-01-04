@@ -1,9 +1,9 @@
+from zs_constants import gui as constants
+from zs_constants.style import L, C, R, T, B
 from zs_src.classes import MemberTable
 from zs_src.entities import ZsSprite
 from zs_src.graphics import ContainerGraphics, TextGraphics
 from zs_src.style import StyleInterface
-from zs_constants import gui as constants
-from zs_constants.style import L, C, R, T, B
 
 
 class GuiSprite(StyleInterface, ZsSprite):
@@ -64,23 +64,31 @@ class GuiSprite(StyleInterface, ZsSprite):
 
 
 class TextSprite(GuiSprite):
-    def __init__(self, name, text=None, position=(0, 0),
+    def __init__(self, text, name=None, position=(0, 0),
                  style_dict=None, cutoff=None, nl=True,
                  **kwargs):
+        if not name:
+            name = text
         super(TextSprite, self).__init__(name, position=position, style_dict=style_dict, **kwargs)
 
-        if not text:
-            text = name
         self.text = text
         self.cutoff = cutoff
         self.nl = nl
         self.graphics = TextGraphics(self)
+
+        self.add_event_methods("change_text")
 
     def change_text(self, text):
         if self.text != text:
             self.text = text
             self.graphics.change_text()
             self.set_rect_size_to_image()
+
+            self.handle_event(("change_text",
+                               ("text", text)))
+
+    def on_change_text(self):
+        pass
 
 
 class ContainerSprite(GuiSprite):

@@ -20,6 +20,11 @@ class Model(ZsEventInterface):
 
         if v_dict:
             self.set_values(v_dict)
+        self.link_object(
+            self, "_value_names",
+            lambda model: model.value_names
+        )
+        self.set_value("_value_names", [])
 
         self.add_event_methods("change_value",
                                "toggle_value",
@@ -27,12 +32,22 @@ class Model(ZsEventInterface):
                                "append_value",
                                "set_value_at_index")
 
+    @property
+    def value_names(self):
+        names = []
+        for name in self.values:
+            if name[0] != "_":
+                names.append(name)
+        names.sort()
+
+        return names
+
     def set_values(self, v_dict):
         for name in v_dict:
             self.values[name] = v_dict[name]
 
     def link_value(self, value_name, function):
-        self.add_change_functions(value_name, function)
+        self.add_change_function(value_name, function)
 
     def link_object(self, obj, value_name, function):
         l = (obj, value_name, function)
@@ -40,11 +55,11 @@ class Model(ZsEventInterface):
 
     def handle_change(self, value_name):
         if value_name in self.change_functions:
-            value = self.values[value_name]
-            for method in self.change_functions[value_name]:
-                method(value)
+            value = self.values.get(value_name)
+            for func in self.change_functions[value_name]:
+                func(value)
 
-    def add_change_functions(self, value_name, function):
+    def add_change_function(self, value_name, function):
         methods = self.change_functions.get(value_name, [])
         methods.append(function)
         self.change_functions[value_name] = methods
@@ -109,7 +124,7 @@ class Model(ZsEventInterface):
     def check_object_listeners(self):
         for l in self.object_listeners:
             obj, value_name, func = l
-            current = self.values[value_name]
+            current = self.values.get(value_name)
             value = func(obj)
 
             if not current == value:
@@ -341,7 +356,7 @@ class Layer(ZsEntity):
         return group
 
     def get_value(self, name):
-        return self.model.values[name]
+        return self.model.values.get(name, None)
 
     def set_value(self, name, value):
         self.model.set_value(name, value)
@@ -422,6 +437,9 @@ class Layer(ZsEntity):
     # each iteration of the loop (i.e. once per frame) if it is assigned
     # to the game's "environment" attribute.
     def main(self, dt, screen):
+        for c in self.controllers:
+            c.update()
+
         self.handle_controller()
         self.update(dt)
         self.draw(screen)

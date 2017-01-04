@@ -440,3 +440,23 @@ class MemberTable:
         return m
 
 
+class CacheList(list):
+    def __init__(self, size):
+        super(CacheList, self).__init__()
+        self._size = size
+
+    def set_size(self):
+        if len(self) > self._size:
+            for i in range(len(self) - 1):
+                self[i] = self[i + 1]
+            self.pop()
+
+    def append(self, p_object):
+        super(CacheList, self).append(p_object)
+        self.set_size()
+
+    def __iadd__(self, other):
+        for item in other:
+            self.append(item)
+
+        return self

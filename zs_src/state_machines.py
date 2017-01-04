@@ -31,6 +31,7 @@ class ZsStateMachine(ZsEventInterface):
         return self.states[self.index]
 
     def set_state(self, index):
+        self.buffer_state = None
         self.index = index
 
         print(self.get_state().name)
@@ -50,7 +51,7 @@ class ZsStateMachine(ZsEventInterface):
         if self.buffer_state is not None:
             e = Event("auto", to_index=self.buffer_state)
             if self.check_transition(e):
-                self.buffer_state = None
+                # self.buffer_state = None
                 self.set_state(e.to_index)
                 print("\t buffered")
                 return
