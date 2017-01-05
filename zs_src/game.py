@@ -6,6 +6,7 @@ import pygame
 class Game:
     def __init__(self, start_env, screen, input_manager, frame_rate):
         self.environment = start_env()
+        self.environment.game_environment = True
         self.screen = screen
         self.frame_rate = frame_rate
 
@@ -37,20 +38,18 @@ class Game:
 
         environment = self.environment
 
-        if not self.controllers[0].devices["start"].held:
-            self.screen.fill((0, 0, 0))
-            environment.main(dt, self.screen)
-        elif self.controllers[0].devices["start"].check():
-            self.screen.fill((0, 0, 0))
-            environment.main(dt, self.screen)
+        self.screen.fill((0, 0, 0))
+        environment.main(dt, self.screen)
 
         t = environment.transition_to
         if t:
-            t.reset_spawn()
             environment.transition_to = None
+            environment.game_environment = False
             return_value = environment.get_value("_return")
             print(return_value)
 
+            t.controllers = self.input_manager.get_controllers()
+            t.set_value("_return", return_value)
+            t.reset_spawn()
+            t.game_environment = True
             self.environment = t
-            self.environment.controllers = self.input_manager.get_controllers()
-            self.environment.set_value("_return", return_value)

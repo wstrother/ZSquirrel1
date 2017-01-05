@@ -129,8 +129,8 @@ class PhysicsLayer(Layer):
 
     def toggle_hitbox_layer(self):
         for layer in self.sub_layers:
-            if layer.name == "draw hitbox layer":
-                layer.hide = not layer.hide
+            if "draw hitbox layer" in layer.name:
+                layer.visible = not layer.visible
 
     def add_vector_layer(self, group):
         self.add_sub_layer(
@@ -138,22 +138,22 @@ class PhysicsLayer(Layer):
 
     def toggle_vector_layer(self):
         for layer in self.sub_layers:
-            if layer.name == "draw vector layer":
-                layer.hide = not layer.hide
+            if "draw vector layer" in layer.name:
+                layer.visible = not layer.visible
 
     def get_draw_order(self):
         order = []
         for layer in self.sub_layers:
-            if layer.name == "draw hitbox layer":
-                if not layer.hide:
+            if "draw hitbox layer" in layer.name:
+                if layer.visible:
                     order.append(layer)
 
         for group in self.groups:
             order.append(group)
 
         for layer in self.sub_layers:
-            if layer.name == "draw vector layer":
-                if not layer.hide:
+            if "draw vector layer" in layer.name:
+                if layer.visible:
                     order.append(layer)
 
         return order
@@ -246,7 +246,6 @@ class DrawVectorLayer(Layer):
     def __init__(self, group, **kwargs):
         super(DrawVectorLayer, self).__init__("draw vector layer", **kwargs)
         self.group = group
-        self.hide = False
 
     def draw(self, screen):
         for sprite in self.group:
@@ -270,7 +269,6 @@ class DrawHitboxLayer(Layer):
     def __init__(self, group, **kwargs):
         super(DrawHitboxLayer, self).__init__("draw hitbox layer", **kwargs)
         self.group = group
-        self.hide = False
 
     def draw(self, screen):
         for sprite in self.group:

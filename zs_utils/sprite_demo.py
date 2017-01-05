@@ -4,6 +4,7 @@ from zs_src.menus import HeadsUpDisplay
 from zs_src.physics import PhysicsLayer
 from zs_src.sprites import CharacterSprite
 from zs_src.state_machines import AnimationMachine
+from zs_utils.debug_menu import DictEditor
 
 MASS, ELAST = 1, .1
 
@@ -14,19 +15,50 @@ class SpriteDemo(Layer):
         self.context = ContextManager(self)
 
         gravity = 1
-        physics_layer = PhysicsLayer(gravity, "sprite demo physics layer")
+        physics_layer = PhysicsLayer(
+            gravity, "sprite demo physics layer")
         g = self.make_group()
         physics_layer.groups.append(g)
         physics_layer.add_hitbox_layer(g)
         physics_layer.add_vector_layer(g)
 
         self.add_sub_layer(physics_layer)
+        self.physics_layer = physics_layer
         self.main_group = g
 
         self.debug_layer = DebugLayer()
+        self.debug_layer.model = self.model
         self.add_sub_layer(self.debug_layer)
 
+        self.set_value("test_list", [1, 2, 3, 4])
+        pause_menu = PauseMenu()
+        pause_menu.model = self.model
+        self.pause_menu = pause_menu
+
+    def handle_controller(self):
+        super(SpriteDemo, self).handle_controller()
+
+        devices = self.controller.devices
+
+        if devices["start"].check() and not self.pause_menu.active:
+            self.handle_event(("pause",
+                               ("layer",
+                                self.pause_menu)))
+
+        # if self.pause_menu.active:
+        #     self.pause_menu.handle_controller()
+
+    def main(self, dt, screen):
+        for c in self.controllers:
+            c.update()
+
+        self.handle_controller()
+        self.update(dt)
+        self.draw(screen)
+
     def populate(self):
+        self.pause_menu.controllers = self.controllers
+
         g = self.main_group
         self.groups = [self.make_group()]
 
@@ -35,6 +67,15 @@ class SpriteDemo(Layer):
         player.add(g)
 
         self.set_value("player", player)
+
+    def on_pause(self):
+        self.add_sub_layer(self.pause_menu)
+        super(SpriteDemo, self).on_pause()
+        self.physics_layer.active = False
+
+    def on_unpause(self):
+        super(SpriteDemo, self).on_unpause()
+        self.physics_layer.active = True
 
     def on_birth(self):
         super(SpriteDemo, self).on_birth()
@@ -238,3 +279,11 @@ class DebugLayer(HeadsUpDisplay):
 
         table.style = {"align_h": "l", "align_v": "c"}
         table.add(self.hud_group)
+
+
+class PauseMenu(DictEditor):
+    def __init__(self, **kwargs):
+        super(PauseMenu, self).__init__("sprite demo pause menu", **kwargs)
+
+        self.active = False
+

@@ -29,8 +29,8 @@ class DebugMenu(Menu):
                 "test_string": "0",
                 }
         }
-        d["test_dict"]["test_list"] = d["test_list"]
-        d["test_list"].append(d["test_dict"])
+        # d["test_dict"]["test_list"] = d["test_list"]
+        # d["test_list"].append(d["test_dict"])
         env = DictEditor("Model", model=d)
 
         change = ("change_environment",
@@ -143,27 +143,29 @@ class DictEditor(Menu):
                 o, position=(x, y)
             )
         )
+        mb.handle_event("change_linked_value")
 
     def get_value_sub_block(self, option, **kwargs):
         tools = self.tools
         value_name = option.text
+        value = self.get_value(value_name)
 
         sb = tools.OptionBlock(
             value_name + " sub block",
             **kwargs)
 
-        editor = self.get_editor_option(value_name)
+        editor = self.get_load_editor_option(value_name)
         if editor:
             sb.add_member_sprite(editor)
 
         o = self.get_value_editor(value_name)
         sb.add_member_sprite(o)
-        if editor:
+        if type(value) not in (int, float, str):
             o.selectable = False
 
         return sb
 
-    def get_editor_option(self, value_name):
+    def get_load_editor_option(self, value_name):
         value = self.get_value(value_name)
         tools = self.tools
 
@@ -206,16 +208,21 @@ class DictEditor(Menu):
     def on_load_dict_editor(self):
         name = self.event.value_name
         d = self.get_value(name)
-        env = DictEditor(name, model=d)
-        env.set_event_listener(
-            "die",
+        x, y = self.position
+        x += 120
+        y += 100
+
+        env = DictEditor(name, model=d,
+                         position=(x, y))
+        self.set_event_listener(
+            "unpause",
             ("update_dict",
              ("value_name", name)),
             self, temp=True
         )
 
-        change = ("change_environment",
-                  ("environment", env))
+        change = ("pause",
+                  ("layer", env))
         self.handle_event(change)
 
     def on_load_list_editor(self):
@@ -223,23 +230,27 @@ class DictEditor(Menu):
         l = self.get_value(name)
         keys = ["index_{}".format(x) for x in range(len(l))]
         d = dict(zip(keys, l))
+        x, y = self.position
+        x += 120
+        y += 100
 
-        env = ListEditor(name, model=d)
-        env.set_event_listener(
-            "die",
+        env = ListEditor(name, model=d,
+                         position=(x, y))
+        self.set_event_listener(
+            "unpause",
             ("update_list",
              ("value_name", name)),
             self, temp=True
         )
 
-        change = ("change_environment",
-                  ("environment", env))
+        change = ("pause",
+                  ("layer", env))
         self.handle_event(change)
 
     def on_return(self):
+        super(DictEditor, self).on_return()
         d = self.format_model()
         self.set_value("_return", d)
-        super(DictEditor, self).on_return()
 
     def format_model(self):
         d = {}
@@ -339,7 +350,7 @@ class ListEditor(DictEditor):
             value_name + " sub block",
             **kwargs)
 
-        o = self.get_editor_option(value_name)
+        o = self.get_load_editor_option(value_name)
         if o:
             sb.add_member_sprite(o)
 

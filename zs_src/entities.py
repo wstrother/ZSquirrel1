@@ -312,19 +312,26 @@ class Layer(ZsEntity):
     method also calls the get_input() method which can reference any
     of the Controller objects in the 'controllers' list.
     """
-    def __init__(self, name, size=SCREEN_SIZE, position=(0, 0), model=None):
+    def __init__(self, name, size=SCREEN_SIZE, position=(0, 0), model=None, controllers=None):
         super(Layer, self).__init__(name, size, position)
 
+        self.game_environment = False
         self.transition_to = None
         self.return_to = None
 
-        self.controllers = []
+        self.visible = True
+        self.active = True
+
+        if controllers:
+            self.controllers = controllers
+        else:
+            self.controllers = []
         self.groups = []
         self.sub_layers = []
 
         self.model = Model(self.name + " model", model)
 
-        self.add_event_methods("change_environment")
+        self.add_event_methods("change_environment", "pause", "unpause")
 
     # the populate method is meant to be overwritten by subclasses.
     # the PopulateMetaclass ensures that the populate() method is
@@ -334,6 +341,8 @@ class Layer(ZsEntity):
 
     def reset_spawn(self, trigger=None):
         self.populate()
+
+        self.active = True
         super(Layer, self).reset_spawn(trigger)
         for layer in self.sub_layers:
             layer.reset_spawn()
@@ -374,10 +383,10 @@ class Layer(ZsEntity):
     def add_sub_layer(self, layer):
         self.sub_layers.append(layer)
 
-        layer.model = self.model
-
     def handle_controller(self):
-        pass
+        for layer in self.sub_layers:
+            if layer.active:
+                layer.handle_controller()
 
     def get_update_methods(self):
         um = super(Layer, self).get_update_methods()
@@ -392,7 +401,8 @@ class Layer(ZsEntity):
 
     def update_sub_layers(self, dt):
         for layer in self.sub_layers:
-            layer.update(dt)
+            if layer.active:
+                layer.update(dt)
 
     def get_sprite(self, name):
         for group in self.groups:
@@ -429,7 +439,8 @@ class Layer(ZsEntity):
             order.append(group)
 
         for layer in self.sub_layers:
-            order.append(layer)
+            if layer.visible:
+                order.append(layer)
 
         return order
 
@@ -452,16 +463,30 @@ class Layer(ZsEntity):
                       ("goto", env))
         self.handle_event(transition)
 
-    def on_death(self):
-        env = self.event.get(
-            "trigger.trigger.goto")
-        if not env:
-            env = self.return_to
+    def on_pause(self):
+        layer = self.event.layer
+        layer.handle_event("spawn")
 
-        if env:
-            self.transition_to = env
-        else:
-                exit()
+        unpause = ("unpause",
+                   ("layer", layer))
+        layer.set_event_listener(
+            "death", unpause, self
+        )
+
+        layer.active = True
+        layer.visible = True
+        if layer not in self.sub_layers:
+            self.add_sub_layer(layer)
+
+    def on_unpause(self):
+        layer = self.event.layer
+        sub_layers = [l for l in self.sub_layers if l is not layer]
+        self.sub_layers = sub_layers
+
+        r = layer.get_value("_return")
+        print("returning {}".format(r))
+        if r:
+            self.set_value("_return", r)
 
     def on_die(self):
         super(Layer, self).on_die()
@@ -469,6 +494,19 @@ class Layer(ZsEntity):
         for group in self.groups:
             for sprite in group:
                 sprite.handle_event("die")
+
+    def on_death(self):
+        self.active = False
+
+        env = self.event.get(
+            "trigger.trigger.goto")
+        if not env:
+            env = self.return_to
+
+        if env:
+            self.transition_to = env
+        elif self.game_environment:
+                exit()
 
 
 class SpawnMetaclass(type):

@@ -24,6 +24,7 @@ class Menu(Layer):
         self.main_block = None
         self.active_block = None
         self.return_block = None
+        self.paused = False
 
         self.model.values["_dialog"] = ""
         self.model.values["_return"] = ""
@@ -86,8 +87,10 @@ class Menu(Layer):
         sub_block.parent = block
 
     def handle_controller(self):
+        super(Menu, self).handle_controller()
+
         if self.active_block and self.active_block.get_state() == "alive":
-            if self.controllers:
+            if self.controllers and not self.paused:
                 self.active_block.handle_controller(self.controller)
 
     def on_change_active_block(self):
@@ -150,7 +153,7 @@ class Menu(Layer):
 
     def on_return(self):
         if self.event.get("value"):
-            self.set_value("return", self.event.value)
+            self.set_value("_return", self.event.value)
         block = self.return_block
 
         if block:
@@ -201,6 +204,16 @@ class Menu(Layer):
     def on_prompt_exit(self):
         if self.get_value("_dialog") == "Yes":
             self.handle_event("die")
+
+    def on_pause(self):
+        super(Menu, self).on_pause()
+        self.event.layer.controllers = self.controllers
+        self.paused = True
+
+    def on_unpause(self):
+        super(Menu, self).on_unpause()
+        self.paused = False
+        self.reset_spawn(trigger=self.event)
 
 
 class HudTools:
