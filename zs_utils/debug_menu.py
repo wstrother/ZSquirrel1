@@ -122,8 +122,8 @@ class DictEditor(Menu):
     def __init__(self, name, **kwargs):
         super(DictEditor, self).__init__(name + " editor", **kwargs)
 
-        self.add_event_methods("load_dict_editor", "update_dict",
-                               "load_list_editor", "update_list")
+        self.add_event_methods("load_sub_editor", "update_dict",
+                               "update_tuple", "update_list")
 
     def populate(self):
         tools = self.tools
@@ -173,15 +173,23 @@ class DictEditor(Menu):
         if type(value) is dict:
             o = tools.make_text_option(
                 "Edit dict",
-                ("load_dict_editor",
-                 ("value_name", value_name)),
+                ("load_sub_editor",
+                 ("value_name", value_name),
+                 ("cls", type(value)),
+                 ("model", value)),
                 self)
 
-        if type(value) is list:
+        if type(value) in (tuple, list):
+            l = dict(zip(
+                [str(x) for x in range(len(value))],
+                value)
+            )
             o = tools.make_text_option(
-                "Edit list",
-                ("load_list_editor",
-                 ("value_name", value_name)),
+                "Edit " + type(value).__name__,
+                ("load_sub_editor",
+                 ("value_name", value_name),
+                 ("cls", type(value)),
+                 ("model", l)),
                 self)
 
         return o
@@ -204,6 +212,31 @@ class DictEditor(Menu):
             o = ObjectEditor(model, value_name, i)
 
         return o
+
+    def on_load_sub_editor(self):
+        name = self.event.value_name
+        cls = {
+            dict: DictEditor,
+            list: ListEditor,
+            tuple: ListEditor
+        }[self.event.cls]
+        model = self.event.model
+
+        x, y = self.position
+        x += 120
+        y += 100
+        layer = cls(name, model=model,
+                    position=(x, y))
+        self.queue_events(("pause",
+                           ("layer", layer)))
+
+        update_event = "update_{}".format(
+            self.event.cls.__name__)
+        self.set_event_listener(
+            "unpause", (update_event,
+                        ("value_name", name)),
+            self, temp=True
+        )
 
     def on_load_dict_editor(self):
         name = self.event.value_name
@@ -269,6 +302,12 @@ class DictEditor(Menu):
         l = self.get_return_value()
         value_name = self.event.value_name
         self.set_value(value_name, l)
+        self.main_block.handle_event("change_linked_value")
+
+    def on_update_tuple(self):
+        t = tuple(self.get_return_value())
+        value_name = self.event.value_name
+        self.set_value(value_name, t)
         self.main_block.handle_event("change_linked_value")
 
 
@@ -344,10 +383,10 @@ class ListEditor(DictEditor):
 
     def get_value_sub_block(self, option, **kwargs):
         tools = self.tools
-        value_name = "index_" + str(option.index)
+        value_name = option.index
 
         sb = tools.OptionBlock(
-            value_name + " sub block",
+            str(value_name) + " sub block",
             **kwargs)
 
         o = self.get_load_editor_option(value_name)
@@ -377,19 +416,10 @@ class ListEditor(DictEditor):
         i, j = self.event.a_index, \
                self.event.b_index
 
-        def name(x):
-            return "index_{}".format(x)
-
-        def print_list():
-            print("\n----")
-            for line in self.format_model():
-                print(line)
-
-        a = self.get_value(name(i))
-        b = self.get_value(name(j))
-        self.set_value(name(i), b)
-        self.set_value(name(j), a)
-        print_list()
+        a = self.get_value(str(i))
+        b = self.get_value(str(j))
+        self.set_value(str(i), b)
+        self.set_value(str(j), a)
 
         self.model.handle_change("_value_names")
         self.handle_event(
@@ -403,3 +433,4 @@ class ListEditor(DictEditor):
             ("select",
              ("no_sound", True))
         )
+

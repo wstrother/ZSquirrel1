@@ -9,7 +9,7 @@ class ZsState:
     def __init__(self, name, index):
         self.name = name
         self.index = index
-        self.transitions = {}
+        self.transitions = OrderedDict()
 
     def add_transition(self, event):
         t = Event.interpret(event)
@@ -51,7 +51,7 @@ class ZsStateMachine(ZsEventInterface):
         if self.buffer_state is not None:
             e = Event("auto", to_index=self.buffer_state)
             if self.check_transition(e):
-                # self.buffer_state = None
+                self.buffer_state = None
                 self.set_state(e.to_index)
                 print("\t buffered")
                 return

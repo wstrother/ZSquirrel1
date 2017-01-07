@@ -2,6 +2,7 @@ from math import pi, cos, sin, atan2
 
 from pygame import draw
 
+from zs_constants.zs import FRAME_RATE
 from zs_src.entities import Layer
 
 
@@ -17,6 +18,13 @@ class Vector:
         s = "{}: {}, {}".format(self.name, i, j)
 
         return s
+
+    def round(self):
+        pass
+        # if abs(self.i_hat) < .001:
+        #     self.i_hat = 0
+        # if abs(self.j_hat) < .001:
+        #     self.j_hat = 0
 
     def cap_values(self, max_i, max_j):
         i, j = self.get_values()
@@ -106,13 +114,16 @@ class Vector:
     def complex(self):
         return complex(self.i_hat, self.j_hat)
 
+    @property
+    def magnitude(self):
+        return abs(self.complex)
 
-class Velocity(Vector):
-    def integrate_acceleration(self, *vectors):
+    @staticmethod
+    def sum_forces(*vectors):
         acceleration = sum(vector.complex for vector in vectors)
 
-        vector = self.get_from_complex(acceleration)
-        self.add(vector)
+        vector = Vector.get_from_complex(acceleration)
+
         return vector
 
 
@@ -122,6 +133,13 @@ class PhysicsLayer(Layer):
 
         self.gravity = Vector("gravity", 0, g)
         self.friction = (.08, .03)
+        self.collision_systems = []
+
+    def set_gravity(self, g):
+        self.gravity.j_hat = g
+
+    def set_friction(self, coefficients):
+        self.friction = coefficients
 
     def add_hitbox_layer(self, group):
         self.add_sub_layer(
@@ -207,21 +225,24 @@ class PhysicsLayer(Layer):
     def get_update_methods(self):
         um = super(PhysicsLayer, self).get_update_methods()
 
-        return um + [self.apply_acceleration,
-                     self.apply_friction,
-                     self.apply_velocity,
-                     self.apply_collisions,
-                     self.apply_gravity]
+        return um + [
+            self.apply_friction,
+            self.apply_acceleration,
+            self.apply_collisions,
+            self.apply_velocity,
+            self.apply_gravity
+        ]
 
     def apply_gravity(self, dt):
         for group in self.groups:
             for sprite in group:
                 if not sprite.is_grounded():
                     gravity = self.gravity.get_copy(scale=sprite.mass)
-                    sprite.add_force(gravity)
+                    sprite.apply_force(gravity)
 
                 else:
-                    sprite.velocity.j_hat = 0
+                    if sprite.velocity.j_hat < 0:
+                        sprite.set_off_ground()
 
     def apply_velocity(self, dt):
         for group in self.groups:
@@ -236,20 +257,48 @@ class PhysicsLayer(Layer):
     def apply_friction(self, dt):
         for group in self.groups:
             for sprite in group:
-                sprite.apply_friction(self.friction)
+                cof = self.friction
+                if sprite.is_grounded():
+                    sprite.apply_friction(cof[0])
+                else:
+                    sprite.apply_friction(cof[1])
 
     def apply_collisions(self, dt):
-        pass
+        for system in self.collision_systems:
+            method, args = system
+            method(*args)
+
+    @staticmethod
+    def handle_collision(sprite_a, sprite_b):
+        r1 = sprite_a.collision_region
+        x1, y1 = r1.center
+
+        r2 = sprite_b.collision_region
+        x2, y2 = r2.center
+
+        dx = x1 - x2
+        dy = y1 - y2
+
+        elasticity = (sprite_a.elasticity + sprite_b.elasticity) / 2
+        magnitude = (sprite_a.velocity.magnitude + sprite_b.velocity.magnitude) / 2
+
+        push_out = Vector("collision", dx, dy).scale(.5).scale(1 - elasticity)
+        push_out = push_out.scale(1 / FRAME_RATE).scale(magnitude)
+        opposite = push_out.get_copy(rotate=.5)
+
+        sprite_a.apply_force(push_out)
+        sprite_b.apply_force(opposite)
 
 
 class DrawVectorLayer(Layer):
     def __init__(self, group, **kwargs):
         super(DrawVectorLayer, self).__init__("draw vector layer", **kwargs)
         self.group = group
+        self.visible = False
 
     def draw(self, screen):
         for sprite in self.group:
-            x, y = sprite.hitbox.center
+            x, y = sprite.collision_region.center
             dx, dy = sprite.velocity.get_values()
             dx *= 5
             dy *= 5
@@ -269,10 +318,11 @@ class DrawHitboxLayer(Layer):
     def __init__(self, group, **kwargs):
         super(DrawHitboxLayer, self).__init__("draw hitbox layer", **kwargs)
         self.group = group
+        self.visible = False
 
     def draw(self, screen):
         for sprite in self.group:
-            r = sprite.hitbox
+            r = sprite.collision_region
 
             if hasattr(r, "radius"):
                 draw.circle(screen, (255, 0, 0), r.center, r.radius, 1)

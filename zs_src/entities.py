@@ -47,7 +47,9 @@ class Model(ZsEventInterface):
             self.values[name] = v_dict[name]
 
     def link_value(self, value_name, function):
-        self.add_change_function(value_name, function)
+        functions = self.change_functions.get(value_name, [])
+        functions.append(function)
+        self.change_functions[value_name] = functions
 
     def link_object(self, obj, value_name, function):
         l = (obj, value_name, function)
@@ -58,11 +60,6 @@ class Model(ZsEventInterface):
             value = self.values.get(value_name)
             for func in self.change_functions[value_name]:
                 func(value)
-
-    def add_change_function(self, value_name, function):
-        methods = self.change_functions.get(value_name, [])
-        methods.append(function)
-        self.change_functions[value_name] = methods
 
     def set_value(self, value_name, value):
         self.values[value_name] = value

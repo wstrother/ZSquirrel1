@@ -25,6 +25,9 @@ class AnimationGraphics(Graphics):
 
         return pygame.Rect((x, y), (w, h))
 
+    def get_frame_number(self):
+        return self.get_image_set().current_frame
+
     def animation_completed(self):
         return self.get_image_set().loops > 0
 
@@ -75,6 +78,8 @@ class AnimationGraphics(Graphics):
             if section:
                 lines = section.split("\n")
                 name = lines.pop(0)
+                if name == "jump_apex":
+                    print(name)
 
                 if not lines[-1]:
                     lines.pop(-1)
@@ -189,11 +194,12 @@ class Animation(ImageSet):
         w, h = cell_size
         sx, sy = start
         for frame in self.frames:
+            print(frame)
             x, y = frame
             x *= w
             y *= h
 
-            position = x + sx, y + sy
+            position = x + (sx * w), y + (sy * h)
             r = pygame.Rect(position, cell_size)
 
             cell = sprite_sheet.subsurface(r)

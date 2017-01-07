@@ -436,10 +436,7 @@ class FunctionBlock(MenuBlock):
     def update(self, dt):
         super(FunctionBlock, self).update(dt)
         if self.get_state() == "alive" and not self.function_called:
-            try:
-                output = self.function()
-            except Exception as e:
-                output = e
+            output = self.function()
             self.function_called = True
             self.queue_events(("return",
                                ("text", output),

@@ -6,6 +6,7 @@ from os.path import join
 import pygame
 
 from zs_constants.controller import FRAME_SLICE_SIZE, INIT_DELAY, HELD_DELAY
+from zs_constants.gui import UP, DOWN, LEFT, RIGHT
 from zs_constants.paths import CONTROLLER_PROFILES
 from zs_src.classes import CacheList
 from zs_src.profiles import Profile
@@ -15,7 +16,8 @@ STICK_DEAD_ZONE = .1
 
 
 class InputMapper:
-    AXIS_SET = False
+    AXIS_NEUTRAL = False
+    AXIS_MIN = .9
     INPUT_DEVICES = []
     for J in range(pygame.joystick.get_count()):
         joy = pygame.joystick.Joystick(J)
@@ -137,8 +139,9 @@ class InputMapper:
             id_num = "'map_id', {}".format(self.id_num)
             name = "'joy_name', '{}'".format(self.joy_device.get_name())
             joy_id = "'joy_id', {}".format(self.joy_device.get_id())
-            line = "('axis_map', ({}), ({}), ({}))".format(
-                id_num, name, joy_id)
+            sign = "'sign', {}".format(self.sign)
+            line = "('axis_map', ({}), ({}), ({}), ({}))".format(
+                id_num, name, joy_id, sign)
 
             return line
 
@@ -156,10 +159,23 @@ class InputMapper:
             return d
 
     @staticmethod
+    def check_axes():
+        axes = []
+        for device in InputMapper.INPUT_DEVICES:
+            for i in range(device.get_numaxes()):
+                axes.append(device.get_axis(i))
+
+        if not InputMapper.AXIS_NEUTRAL:
+            InputMapper.AXIS_NEUTRAL = all([axis < .01 for axis in axes])
+
+    @staticmethod
     def get_mapping():
-        get_device = lambda x: InputMapper.INPUT_DEVICES[x]
+        devices = InputMapper.INPUT_DEVICES
+
         pygame.event.clear()
         while True:
+            InputMapper.check_axes()
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     exit()
@@ -174,20 +190,14 @@ class InputMapper:
                     return InputMapper.ButtonMappingKey(event.key)
 
                 if hasattr(event, "joy"):
-                    input_device = get_device(event.joy)
+                    input_device = devices[event.joy]
 
-                    if axis and abs(event.value) < .1:
-                        InputMapper.AXIS_SET = False
-
-                    if axis and abs(event.value) > .5:
+                    if axis and abs(event.value) > InputMapper.AXIS_MIN:
                         positive = event.value > 0
-                        if positive:
-                            sign = 1
-                        else:
-                            sign = -1
+                        sign = (int(positive) * 2) - 1      # -1 for False, 1 for True
 
-                        if not InputMapper.AXIS_SET:
-                            InputMapper.AXIS_SET = True
+                        if InputMapper.AXIS_NEUTRAL:
+                            InputMapper.AXIS_NEUTRAL = False
                             return InputMapper.ButtonMappingAxis(
                                 event.axis, input_device, sign)
 
@@ -222,11 +232,10 @@ class InputMapper:
             raise IOError("No axes detected for connected devices")
 
         while True:
-            for event in pygame.event.get():
-                if event.type == pygame.JOYAXISMOTION and abs(event.value) > .1:
-                    InputMapper.AXIS_SET = False
+            InputMapper.check_axes()
 
-                if event.type == pygame.JOYAXISMOTION and abs(event.value) > .5:
+            for event in pygame.event.get():
+                if event.type == pygame.JOYAXISMOTION and abs(event.value) > InputMapper.AXIS_MIN:
 
                     positive = event.value > 0
                     if positive:
@@ -236,8 +245,8 @@ class InputMapper:
                     id_num = event.axis
                     input_device = InputMapper.INPUT_DEVICES[event.joy]
 
-                    if not InputMapper.AXIS_SET:
-                        InputMapper.AXIS_SET = True
+                    if InputMapper.AXIS_NEUTRAL:
+                        InputMapper.AXIS_NEUTRAL = False
                         return InputMapper.AxisMapping(
                             id_num, input_device, sign)
 
@@ -254,8 +263,11 @@ class InputManager:
     def get_controllers(self):
         controllers = []
         for name in self.controller_profiles:
-            controllers.append(
-                self.make_controller(name))
+            try:
+                controllers.append(
+                    self.make_controller(name))
+            except IndexError:
+                print(name + " failed to load")
 
         return controllers
 
@@ -281,6 +293,7 @@ class InputManager:
 class ZsInputDevice:
     def __init__(self, name, controller):
         self.name = name
+        self.default = None
         self.controller = controller
 
     def get_frames(self):
@@ -291,7 +304,7 @@ class ZsInputDevice:
             return self.get_frames()[-1]
 
         else:
-            return None
+            return self.default
 
     def update(self):
         pass
@@ -304,6 +317,7 @@ class Button(ZsInputDevice):
         self.init_delay = INIT_DELAY
         self.held_delay = HELD_DELAY
         self.held = 0
+        self.default = 0
 
     @property
     def ignore(self):
@@ -341,12 +355,17 @@ class Button(ZsInputDevice):
 
 
 class Dpad(ZsInputDevice):
+    FIRST = 0
+
     def __init__(self, *args):
         super(Dpad, self).__init__(*args)
+        if not Dpad.FIRST:
+            Dpad.FIRST = id(self)
 
         def get_d(d):
             return self.controller.devices[self.name + "_" + d]
-
+        self.last_direction = (1, 0)
+        self.default = (0, 0)
         self.buttons = (get_d("up"),
                         get_d("down"),
                         get_d("left"),
@@ -362,6 +381,15 @@ class Dpad(ZsInputDevice):
 
     def check(self):
         return self.get_dominant().check()
+
+    def update(self):
+        if self.get_value():
+            x, y = self.get_value()
+            if (x, y) in (UP, DOWN, LEFT, RIGHT):
+                if self.last_direction != (x, y):
+                    if id(self) == Dpad.FIRST:
+                        print(x, y)
+                self.last_direction = x, y
 
     @staticmethod
     def get_input(mappings):
@@ -380,6 +408,7 @@ class ThumbStick(ZsInputDevice):
     def __init__(self, *args, dead_zone=STICK_DEAD_ZONE):
         super(ThumbStick, self).__init__(*args)
         self.dead_zone = dead_zone
+        self.default = (0, 0)
 
     @property
     def x_axis(self):
@@ -418,6 +447,7 @@ class Trigger(ZsInputDevice):
         super(Trigger, self).__init__(*args)
 
         self.button = self.controller.devices[self.name + "_button"]
+        self.default = 0
 
     @property
     def get_displacement(self):
@@ -437,6 +467,7 @@ class ZsController:
     def __init__(self, name, profile):
         self.name = name
         self.frames = CacheList(FRAME_SLICE_SIZE)
+        self.commands = []
 
         self.devices = {}
         self.mapping_dict = {}
@@ -508,9 +539,18 @@ class ZsController:
         return output
 
     def update(self):
+        self.update_frames()
         for device in self.devices.values():
             device.update()
-        self.update_frames()
+
+        for command in self.commands:
+            device_frames = [self.get_frames(n) for n in command.devices]
+            frames = list(zip(*device_frames))
+            command.update(frames[-1])
+
+        if self.commands:
+            if self.commands[0].active and self.devices["dpad"].last_direction == (1, 0):
+                print(" fuck")
 
     def update_frames(self):
         frame = []
@@ -565,3 +605,94 @@ class ZsController:
         assert joy_device.get_name() == profile.joy_name
 
         return InputMapper.AxisMapping(id_num, joy_device, sign)
+
+
+class Command:
+    def __init__(self, name, steps, device_names, frame_window=0):
+        self.name = name
+        self.steps = steps
+        if not frame_window:
+            frame_window = sum([step.frame_window for step in steps])
+        self.frame_window = frame_window
+        self.frames = CacheList(frame_window)
+        self.devices = device_names
+        self.active = False
+
+    def check(self):
+        frames = self.frames
+        l = len(frames)
+        i = 0
+        for step in self.steps:
+            sub_slice = frames[i:l]
+            j = step.check(sub_slice)
+            step.last = j
+            i += j
+            if j == 0:
+                return False
+
+        return True
+
+    def update(self, frame):
+        self.frames.append(frame)
+        c = self.check()
+        self.active = c
+
+        if c:
+            self.frames.clear()
+
+    def __repr__(self):
+        return self.name
+
+
+class Step:
+    # condition: device_name, check_func
+    # check_func: function(frame) => Bool
+
+    def __init__(self, description, conditions, frame_window=1):
+        self.description = description
+        self.conditions = conditions
+        self.frame_window = frame_window
+        self.last = 0
+
+    def get_matrix(self, frames):
+        frame_matrix = []
+        conditions = self.conditions
+
+        for con in conditions:
+            check = con
+            row = [check(frame) for frame in frames]
+            frame_matrix.append(row)
+
+        return frame_matrix
+
+    def get_sub_matrix(self, frame_matrix, i):
+        conditions = self.conditions
+        fw = self.frame_window
+        sub_matrix = []
+
+        for con in conditions:
+            row_i = conditions.index(con)
+            row = frame_matrix[row_i][i:i + fw]
+            sub_matrix.append(row)
+
+        return sub_matrix
+
+    def check(self, frames):
+        frame_matrix = self.get_matrix(frames)
+        fw = self.frame_window
+        fl = len(frames)
+
+        for i in range((fl - fw) + 1):
+            sub_matrix = self.get_sub_matrix(frame_matrix, i)
+            truth = all([any(row) for row in sub_matrix])
+
+            if truth:
+                return i + 1
+        return 0
+
+    def __repr__(self):
+        d, fw = self.description, self.frame_window
+
+        return "{}, frame window: {}".format(d, fw)
+
+

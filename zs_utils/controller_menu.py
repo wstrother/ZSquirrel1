@@ -169,7 +169,7 @@ class ControllerMenu(Menu):
         self.handle_event(change_env)
 
     def on_load_make_profile_menu(self):
-        profile = self.get_value("dialog")
+        profile = self.get_value("_dialog")
         template = self.event.template
 
         env = MakeProfileMenu(profile, template)
@@ -590,7 +590,7 @@ class MakeProfileMenu(Menu):
             device_profile)
 
     def on_map_button(self):
-        mapping = self.get_value("dialog")
+        mapping = self.get_value("_dialog")
         name = self.event.device_name
         i = self.event.index
 
@@ -598,7 +598,7 @@ class MakeProfileMenu(Menu):
             i, "Button", name, mapping)
 
     def on_map_dpad(self):
-        mapping = self.get_value("dialog")
+        mapping = self.get_value("_dialog")
         name = self.event.device_name
         i = self.event.index
         direction = self.event.direction
@@ -634,7 +634,7 @@ class MakeProfileMenu(Menu):
                 i, "Dpad", name, *mappings)
 
     def on_map_thumbstick(self):
-        mapping = self.get_value("dialog")
+        mapping = self.get_value("_dialog")
         name = self.event.device_name
         i = self.event.index
         direction = self.event.direction
@@ -664,7 +664,7 @@ class MakeProfileMenu(Menu):
                 i, "ThumbStick", name, *mappings)
 
     def on_map_trigger(self):
-        mapping = self.get_value("dialog")
+        mapping = self.get_value("_dialog")
         name = self.event.device_name
         i = self.event.index
 

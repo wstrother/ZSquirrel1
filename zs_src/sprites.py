@@ -1,7 +1,7 @@
 from zs_constants.gui import UP, DOWN, LEFT, RIGHT
 from zs_src.animations import AnimationGraphics, LeftRightGraphics
 from zs_src.entities import ZsSprite
-from zs_src.physics import Vector, Velocity
+from zs_src.physics import Vector
 
 
 class AnimationSprite(ZsSprite):
@@ -40,15 +40,16 @@ class PhysicsSprite(AnimationSprite):
 
         self.mass = mass
         self.elasticity = elasticity
+        self.friction = 0
 
         self.acceleration = Vector("acceleration", 0, 0)
-        self.velocity = Velocity("velocity", 0, 0)
+        self.velocity = Vector("velocity", 0, 0)
         self.forces = []
 
         self._grounded = False
 
     @property
-    def hitbox(self):
+    def collision_region(self):
         if self.graphics:
             return self.graphics.get_hitbox()
 
@@ -64,11 +65,13 @@ class PhysicsSprite(AnimationSprite):
     def set_off_ground(self):
         self._grounded = False
 
-    def add_force(self, vector):
+    def apply_force(self, vector):
         self.forces.append(vector)
 
     def apply_acceleration(self):
-        self.acceleration = self.velocity.integrate_acceleration(*self.forces)
+        self.acceleration = Vector.sum_forces(*self.forces)
+        self.velocity.add(self.acceleration)
+        self.velocity.round()
         self.forces = []
 
     def apply_velocity(self):
@@ -76,21 +79,11 @@ class PhysicsSprite(AnimationSprite):
         movement = self.velocity.get_copy(scale=scalar)
         self.position = movement.apply_to_point(self.position)
 
-    def apply_friction(self, coefficients):
-        ground_cf, air_cf = coefficients
-        i, j = self.velocity.get_values()
-
-        j_cf = air_cf
-        if not self.is_grounded():
-            i_cf = air_cf
-        else:
-            i_cf = ground_cf
-
-        i_value = (i_cf * i) * -1
-        j_value = (j_cf * j) * -1
-        friction = Vector("friction", i_value, j_value)
-
-        self.velocity.add(friction)
+    def apply_friction(self, cof):
+        friction = self.velocity.get_copy(scale=-1 * cof)
+        friction.round()
+        self.apply_force(friction)
+        self.friction = friction
 
 
 class CharacterSprite(PhysicsSprite):
@@ -119,6 +112,7 @@ class CharacterSprite(PhysicsSprite):
             name = self.animation_machine.get_state().name
             direction = self.get_direction_string()
 
+            # print("{}_{}".format(direction, name))
             return "{}_{}".format(direction, name)
         else:
             return "error"
