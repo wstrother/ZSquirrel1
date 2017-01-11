@@ -17,11 +17,7 @@ class AnimationGraphics(Graphics):
 
     def get_hitbox(self):
         animation = self.get_image_set()
-
-        w, h, ox, oy = animation.hitbox
-        x, y = self.entity.position
-        x += ox
-        y += oy
+        w, h, x, y = animation.hitbox
 
         return pygame.Rect((x, y), (w, h))
 

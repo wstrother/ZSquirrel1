@@ -45,6 +45,7 @@ class CharacterSprite(PhysicsInterface, AnimationSprite):
         self.controller = None
         self.direction = RIGHT
         self._position = 0.0, 0.0
+        self.adjust_position(self.rect.topleft)
 
     @property
     def position(self):

@@ -1,7 +1,6 @@
 from types import FunctionType, MethodType
 
 from zs_constants.sprite_demo import GRAVITY, COF
-from zs_constants.zs import SCREEN_SIZE
 from zs_src.classes import CacheList
 from zs_src.controller import Command, Step
 from zs_src.entities import Layer
@@ -48,8 +47,8 @@ class SpriteDemo(Layer):
 
     def populate(self):
         self.sprite_layer.toggle_wall_layer()
-        self.sprite_layer.toggle_hitbox_layer()
-        self.sprite_layer.toggle_vector_layer()
+        # self.sprite_layer.toggle_hitbox_layer()
+        # self.sprite_layer.toggle_vector_layer()
         # self.debug_layer.visible = False
 
         for controller in self.controllers:
@@ -59,7 +58,7 @@ class SpriteDemo(Layer):
 
         self.set_value(
             "player",
-            spawn("player", position=(450, 400))
+            spawn("player", position=(450, 100))
         )
         # spawn("yoshi", position=(500, 300))
         # spawn("yoshi", position=(200, 300))
@@ -113,9 +112,12 @@ class ContextManager:
 
     @staticmethod
     def set_up_physics(layer, group):
-        walls = [Wall(
-            (0, 550), (800, 551)
-        )]
+        a = 350, 350
+        b = 780, 480
+        walls = [Wall(a, b, True),
+                 Wall((0, 600), (999, 600), True),
+                 Wall((50, 0), (50, 600)),
+                 Wall((750, 600), (750, 0))]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
         layer.add_hitbox_layer(group)
@@ -309,6 +311,7 @@ class DemoSprite(CharacterSprite):
             if state == "jump_up" and self.is_grounded():
                 jump = self.Vector("jump", 0, -25)
                 self.apply_force(jump)
+                self.set_off_ground()
 
             if self.controller:
                 dpad = self.controller.devices["dpad"]
@@ -323,12 +326,6 @@ class DemoSprite(CharacterSprite):
                     else:
                         if last in (self.RIGHT, self.LEFT):
                             self.direction = last
-
-                # if state in ("jump_squat", "jump_land"):
-                #     if self.velocity.i_hat > 0:
-                #         self.direction = self.RIGHT
-                #     if self.velocity.i_hat < 0:
-                #         self.direction = self.LEFT
 
                 movement = {
                     "walk": 1,
@@ -353,26 +350,6 @@ class DemoSprite(CharacterSprite):
                     move = self.Vector("move", dx, 0)
                     self.apply_force(move)
 
-            bottom = self.collision_region.bottom
-
-            x, y = self.position
-            if bottom >= SCREEN_SIZE[1]:
-                y -= bottom - SCREEN_SIZE[1]
-                self.position = x, y
-                self.set_on_ground()
-                self.velocity.j_hat = 0
-
-            else:
-                self.set_off_ground()
-
-            if self.collision_region.right < 0:
-                x = SCREEN_SIZE[0] - self.collision_region.width
-                self.position = x, y
-
-            if self.collision_region.left > SCREEN_SIZE[0]:
-                x = 0
-                self.position = x, y
-
 
 class DebugLayer(HeadsUpDisplay):
     def __init__(self, **kwargs):
@@ -380,7 +357,7 @@ class DebugLayer(HeadsUpDisplay):
 
     @staticmethod
     def animation_machine_reporter():
-        states = CacheList(7)
+        states = CacheList(4)
 
         def report_animation(p):
             if p.animation_machine:
@@ -422,6 +399,7 @@ class DebugLayer(HeadsUpDisplay):
                 f_string.format("ACCELERATION", ax, ay),
                 f_string.format("VELOCITY", vx, vy),
                 f_string.format("POSITION", x, y),
+                "GROUNDED: " + str(p.is_grounded())
             ]
 
             return text
@@ -440,12 +418,11 @@ class DebugLayer(HeadsUpDisplay):
             )
         ]
         block = tools.ContainerSprite(
-            "physics reporter box", [tools.make_reporter_sprite(
-                player, self.physics_reporter()
-            )],
+            "physics reporter box", reporters,
             size=(750, 100), table_style="cutoff 4",
             position=(25, 0)
         )
+        block.style = {"align_h": "c"}
         block.add(self.hud_group)
         # self.physics_reporter(player)
 
