@@ -78,8 +78,6 @@ class AnimationGraphics(Graphics):
             if section:
                 lines = section.split("\n")
                 name = lines.pop(0)
-                if name == "jump_apex":
-                    print(name)
 
                 if not lines[-1]:
                     lines.pop(-1)
@@ -194,7 +192,7 @@ class Animation(ImageSet):
         w, h = cell_size
         sx, sy = start
         for frame in self.frames:
-            print(frame)
+            # print(frame)
             x, y = frame
             x *= w
             y *= h

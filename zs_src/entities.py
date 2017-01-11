@@ -51,11 +51,21 @@ class Model(ZsEventInterface):
         functions.append(function)
         self.change_functions[value_name] = functions
 
+    def link_sub_value(self, value_name, key, function):
+        functions = self.change_functions.get(value_name, [])
+
+        def sub_function(value):
+            function(value[key])
+
+        functions.append(sub_function)
+        self.change_functions[value_name] = functions
+
     def link_object(self, obj, value_name, function):
         l = (obj, value_name, function)
         self.object_listeners.append(l)
 
     def handle_change(self, value_name):
+
         if value_name in self.change_functions:
             value = self.values.get(value_name)
             for func in self.change_functions[value_name]:

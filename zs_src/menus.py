@@ -397,6 +397,17 @@ class MenuTools(HudTools):
     def set_activation_event(option, event, target):
         option.set_event_listener("activate", event, target)
 
+    @staticmethod
+    def set_function_call_on_activation(option, function):
+        def on_activate():
+            event_method = getattr(option, "on_activate")
+            event_method()
+            function()
+
+        option.event_handler.set_event_method(
+            "activate", on_activate
+        )
+
     def show_dialog_on_activate(self, option, block, response=None,
                                 target=None, conditionals=None):
         menu = self.layer

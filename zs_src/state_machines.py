@@ -34,8 +34,6 @@ class ZsStateMachine(ZsEventInterface):
         self.buffer_state = None
         self.index = index
 
-        print(self.get_state().name)
-
     def get_transitions(self):
         return self.get_state().transitions
 
@@ -53,7 +51,6 @@ class ZsStateMachine(ZsEventInterface):
             if self.check_transition(e):
                 self.buffer_state = None
                 self.set_state(e.to_index)
-                print("\t buffered")
                 return
 
         transitions = self.get_transitions()
@@ -98,6 +95,11 @@ class AnimationMachine(ZsStateMachine):
         file.close()
 
         self.set_up_states(states)
+
+    @property
+    def controller(self):
+        if self.sprite:
+            return self.sprite.controller
 
     def set_state(self, index):
         super(AnimationMachine, self).set_state(index)

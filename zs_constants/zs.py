@@ -9,6 +9,5 @@ REPR_SIG_FIGS = 3
 TRANSITION_TIME = 6
 TEXT_ANTI_ALIAS = 1
 DIALOG_POSITION = (300, 300)
-CONTROLLERS = ("dev_mode",)
-
+CONTROLLERS = ("dev_mode2", "dev_mode")
 

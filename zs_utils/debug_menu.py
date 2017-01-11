@@ -1,3 +1,5 @@
+from types import FunctionType, MethodType
+
 from zs_src.events import Event
 from zs_src.menus import Menu
 from zs_src.menus_gui import TextFieldOption, SwitchOption, TextOption
@@ -14,27 +16,16 @@ class DebugMenu(Menu):
         mb = tools.make_main_block()
         mb.add_member_sprite(
             tools.make_text_option(
-                "load model editor",
+                "Load model editor",
                 "load_model_editor", self)
         )
 
     def on_load_model_editor(self):
-        d = {
-            "test_string": "hello",
-            "test_number": 123,
-            "test_bool": False,
-            "test_list": ["a", "b", "c", "d", "e", "f"],
-            "test_object": self.tools.TextSprite("hi"),
-            "test_dict": {
-                "test_string": "0",
-                }
-        }
-        # d["test_dict"]["test_list"] = d["test_list"]
-        # d["test_list"].append(d["test_dict"])
-        env = DictEditor("Model", model=d)
+        env = DictEditor("Model editor")
+        env.model = self.model
 
-        change = ("change_environment",
-                  ("environment", env))
+        change = ("pause",
+                  ("layer", env))
         self.handle_event(change)
 
 
@@ -178,6 +169,11 @@ class DictEditor(Menu):
                  ("cls", type(value)),
                  ("model", value)),
                 self)
+
+        if type(value) in (FunctionType, MethodType):
+            o = tools.TextOption("Call function")
+            tools.set_function_call_on_activation(
+                o, value)
 
         if type(value) in (tuple, list):
             l = dict(zip(

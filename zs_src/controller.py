@@ -371,6 +371,22 @@ class Dpad(ZsInputDevice):
                         get_d("left"),
                         get_d("right"))
 
+    @property
+    def up(self):
+        return self.buttons[0]
+
+    @property
+    def down(self):
+        return self.buttons[1]
+
+    @property
+    def left(self):
+        return self.buttons[2]
+
+    @property
+    def right(self):
+        return self.buttons[3]
+
     def get_direction(self):
         return self.get_value()
 
@@ -386,9 +402,6 @@ class Dpad(ZsInputDevice):
         if self.get_value():
             x, y = self.get_value()
             if (x, y) in (UP, DOWN, LEFT, RIGHT):
-                if self.last_direction != (x, y):
-                    if id(self) == Dpad.FIRST:
-                        print(x, y)
                 self.last_direction = x, y
 
     @staticmethod

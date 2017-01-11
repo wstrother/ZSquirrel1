@@ -362,7 +362,7 @@ class GuimtCutoff(GuiMemberTable):
         self.cutoff = cutoff
 
         if member_list:
-            for item in self.member_list:
+            for item in member_list:
                 self.add_member(item, cutoff)
 
     def add_member(self, sprite, *args):

@@ -1,7 +1,8 @@
 from zs_constants.gui import UP, DOWN, LEFT, RIGHT
+from zs_constants.sprite_demo import MASS, ELAST
 from zs_src.animations import AnimationGraphics, LeftRightGraphics
 from zs_src.entities import ZsSprite
-from zs_src.physics import Vector
+from zs_src.physics import PhysicsInterface
 
 
 class AnimationSprite(ZsSprite):
@@ -18,6 +19,7 @@ class AnimationSprite(ZsSprite):
 
         self.graphics = self.graphics_class(sprite_sheet, self, self.get_image_state)
         self.graphics.set_up_animations(stream_file)
+        self.set_rect_size_to_image()
 
     def update(self, dt):
         super(AnimationSprite, self).update(dt)
@@ -32,69 +34,30 @@ class AnimationSprite(ZsSprite):
             return "Error"
 
 
-class PhysicsSprite(AnimationSprite):
-    Vector = Vector
-
-    def __init__(self, name, mass=1, elasticity=.1, **kwargs):
-        super(PhysicsSprite, self).__init__(name, **kwargs)
-
-        self.mass = mass
-        self.elasticity = elasticity
-        self.friction = 0
-
-        self.acceleration = Vector("acceleration", 0, 0)
-        self.velocity = Vector("velocity", 0, 0)
-        self.forces = []
-
-        self._grounded = False
-
-    @property
-    def collision_region(self):
-        if self.graphics:
-            return self.graphics.get_hitbox()
-
-        else:
-            return self.rect
-
-    def is_grounded(self):
-        return self._grounded
-
-    def set_on_ground(self):
-        self._grounded = True
-
-    def set_off_ground(self):
-        self._grounded = False
-
-    def apply_force(self, vector):
-        self.forces.append(vector)
-
-    def apply_acceleration(self):
-        self.acceleration = Vector.sum_forces(*self.forces)
-        self.velocity.add(self.acceleration)
-        self.velocity.round()
-        self.forces = []
-
-    def apply_velocity(self):
-        scalar = 1 / self.mass
-        movement = self.velocity.get_copy(scale=scalar)
-        self.position = movement.apply_to_point(self.position)
-
-    def apply_friction(self, cof):
-        friction = self.velocity.get_copy(scale=-1 * cof)
-        friction.round()
-        self.apply_force(friction)
-        self.friction = friction
-
-
-class CharacterSprite(PhysicsSprite):
+class CharacterSprite(PhysicsInterface, AnimationSprite):
     UP, DOWN, LEFT, RIGHT = UP, DOWN, LEFT, RIGHT
 
-    def __init__(self, name, **kwargs):
+    def __init__(self, name, mass=MASS, elasticity=ELAST, **kwargs):
         kwargs.update({"graphics_class": LeftRightGraphics})
-        super(CharacterSprite, self).__init__(name, **kwargs)
+        AnimationSprite.__init__(self, name, **kwargs)
+        PhysicsInterface.__init__(self, mass, elasticity)
 
         self.controller = None
         self.direction = RIGHT
+        self._position = 0.0, 0.0
+
+    @property
+    def position(self):
+        return self._position
+
+    @position.setter
+    def position(self, value):
+        self.adjust_position(value)
+
+    def adjust_position(self, value):
+        self._position = value
+        x, y = value
+        self.rect.topleft = round(x), round(y)
 
     def set_controller(self, controller):
         self.controller = controller
@@ -112,7 +75,6 @@ class CharacterSprite(PhysicsSprite):
             name = self.animation_machine.get_state().name
             direction = self.get_direction_string()
 
-            # print("{}_{}".format(direction, name))
             return "{}_{}".format(direction, name)
         else:
             return "error"

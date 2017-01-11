@@ -170,7 +170,7 @@ class StateMeter(Meter):
         self.states = states
 
         maximum = len(states) - 1
-        if maximum < 1:
+        if maximum < 0:
             raise ValueError("Empty states list passed")
 
         super(StateMeter, self).__init__(name, 0, maximum=maximum)
