@@ -17,15 +17,24 @@ class AnimationGraphics(Graphics):
 
     def get_hitbox(self):
         animation = self.get_image_set()
-        w, h, x, y = animation.hitbox
+        if animation:
+            w, h, x, y = animation.hitbox
 
-        return pygame.Rect((x, y), (w, h))
+            return pygame.Rect((x, y), (w, h))
+        else:
+            return self.entity.rect
 
     def get_frame_number(self):
-        return self.get_image_set().current_frame
+        if self.get_image_set():
+            return self.get_image_set().current_frame
+        else:
+            return 0
 
     def animation_completed(self):
-        return self.get_image_set().loops > 0
+        if self.get_image_set():
+            return self.get_image_set().loops > 0
+        else:
+            return True
 
     def reset_animations(self):
         for name in self.image_sets:

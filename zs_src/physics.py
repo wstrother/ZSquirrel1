@@ -17,7 +17,8 @@ class Vector:
     def __repr__(self):
         i = round(self.i_hat, 4)
         j = round(self.j_hat, 4)
-        s = "{}: {}, {}".format(self.name, i, j)
+        a = round(self.get_angle(), 3)
+        s = "{}: {}, {} angle: {}".format(self.name, i, j, a)
 
         return s
 
@@ -129,7 +130,7 @@ class Vector:
 
         return x, y
 
-    def get_copy(self, rotate=0, scale=0):
+    def get_copy(self, rotate=0.0, scale=0):
         v = Vector(self.name, self.i_hat, self.j_hat)
 
         if rotate:
@@ -199,7 +200,7 @@ class Vector:
 class Wall(Vector):
     NORMAL_DRAW_SCALE = Vector.DRAW_WIDTH * 2
 
-    def __init__(self, start, finish, ground=False):
+    def __init__(self, start, finish, ground=False, friction=0.0):
         i_hat, j_hat = finish
         i_hat -= start[0]
         j_hat -= start[1]
@@ -207,11 +208,13 @@ class Wall(Vector):
 
         self.origin = start
         self._normal = Vector("normal", 1, 0)
+
+        self.friction = friction
         self.ground = ground
         self.sprite_collide_offset = False
 
     def __repr__(self):
-        return "Wall with angle {} at {}".format(
+        return "Wall with angle {:.3f} at {}".format(
             self.get_angle(), self.origin)
 
     @property
@@ -279,8 +282,8 @@ class Wall(Vector):
             v_bound = point_in_bounds(
                 collision, offset, vector.apply_to_point(offset)
             )
-            args = [(round(x[0]), round(x[1])) for x in (collision, offset, vector.apply_to_point(offset))]
-            print(args)
+            # args = [(round(x[0]), round(x[1])) for x in (collision, offset, vector.apply_to_point(offset))]
+            # print(args)
 
             if not w_bound or not v_bound:
                 # print(w_bound, v_bound)
@@ -303,18 +306,22 @@ class Wall(Vector):
     def sprite_collision(self, sprite):
         v = sprite.velocity
 
-        if v.check_orientation(self.normal):
+        if not v.check_orientation(
+                self.normal.get_copy(rotate=.5)):
             return False
 
         else:
-            print("testing " + str(self))
-
+            # print("testing " + str(self))
             near, far = self.get_sprite_collision_points(
                 sprite)
+            dx = near[0] - far[0]
+            dy = near[1] - far[1]
+            skeleton = Vector("skeleton", dx, dy)
+
             near_collision = self.vector_collision(
                 near, v)
             far_collision = self.vector_collision(
-                far, v)
+                far, skeleton)
 
             if near_collision:
                 self.sprite_collide_offset = False
@@ -326,33 +333,29 @@ class Wall(Vector):
 
     @staticmethod
     def handle_collision_smooth(sprite, wall):
-        print("handling wall collision")
+        # print("{} handling collision".format(wall))
 
         near, far = wall.get_sprite_collision_points(sprite)
-        if not wall.sprite_collide_offset:
-            collision_point = near
-        else:
-            collision_point = far
-
         x, y = sprite.velocity.apply_to_point(
-            collision_point)
+            near)
         ix, iy = wall.axis_collision(
             (x, y), wall.normal)
         dx = ix - x
         dy = iy - y
         adjust = Vector("velocity adjustment", dx, dy)
+        sprite.move(adjust.get_value())
+        # print("applying {} to {}".format(adjust, sprite))
+
+        if wall.sprite_collide_offset:
+            dx = near[0] - far[0]
+            dy = near[1] - far[1]
+            adjust.i_hat += dx
+            adjust.j_hat += dy
+            print(dx, dy, adjust)
         sprite.apply_force(adjust)
 
-        mx, my = adjust.get_value()
-        if wall.sprite_collide_offset:
-            dx = far[0] - near[0]
-            dy = far[1] - near[1]
-            mx += dx
-            my += dy
-        sprite.move((mx, my))
-
         if wall.ground:
-            sprite.set_on_ground()
+            sprite.set_on_ground(wall)
 
     def draw(self, screen, color, offset=(0, 0)):
         super(Wall, self).draw(
@@ -448,7 +451,12 @@ class PhysicsLayer(Layer):
 
     @staticmethod
     def sprite_collision(sprite_a, sprite_b):
-        return sprite_a.collision_region.colliderect(sprite_b.collision_region)
+        r1 = sprite_a.collision_region.copy()
+        r1.topleft = sprite_a.position
+        r2 = sprite_b.collision_region.copy()
+        r2.topleft = sprite_b.position
+
+        return r1.colliderect(r2)
 
     @staticmethod
     def wall_collision(sprite, wall):
@@ -481,6 +489,9 @@ class PhysicsLayer(Layer):
     @staticmethod
     def sprite_regions_collision_check(
             sprite, regions, collision_test, handle_collision):
+        # if sprite.velocity.j_hat < 0:
+        sprite.set_off_ground()
+
         for region in regions:
             if collision_test(sprite, region):
                 handle_collision(sprite, region)
@@ -510,10 +521,6 @@ class PhysicsLayer(Layer):
                 gravity = self.gravity.get_copy(scale=sprite.mass)
                 sprite.apply_force(gravity)
 
-                # else:
-                #     if sprite.velocity.j_hat < 0:
-                #         sprite.set_off_ground()
-
     def apply_velocity(self, dt):
         for group in self.groups:
             for sprite in group:
@@ -529,7 +536,8 @@ class PhysicsLayer(Layer):
             for sprite in group:
                 cof = self.friction
                 if sprite.is_grounded():
-                    sprite.apply_friction(cof[0])
+                    friction = cof[0] + sprite.ground.friction
+                    sprite.apply_friction(friction)
                 else:
                     sprite.apply_friction(cof[1])
 
@@ -541,10 +549,10 @@ class PhysicsLayer(Layer):
     @staticmethod
     def handle_collision(sprite_a, sprite_b):
         r1 = sprite_a.collision_region
-        x1, y1 = r1.center
+        x1, y1 = sprite_a.collision_point
 
         r2 = sprite_b.collision_region
-        x2, y2 = r2.center
+        x2, y2 = sprite_b.collision_point
 
         left = x1 < x2
         right = x1 > x2
@@ -569,27 +577,27 @@ class PhysicsLayer(Layer):
         push_out = push_out.scale(1 / FRAME_RATE).scale(magnitude)
         opposite = push_out.get_copy(rotate=.5)
 
-        dampener = 4
+        dampener = elasticity * 2.5
         if left:
             if sprite_a.velocity.i_hat > 0:
-                sprite_a.velocity.i_hat /= dampener
+                sprite_a.velocity.i_hat *= dampener
             if sprite_b.velocity.i_hat < 0:
-                sprite_b.velocity.i_hat /= dampener
+                sprite_b.velocity.i_hat *= dampener
         if right:
             if sprite_a.velocity.i_hat < 0:
-                sprite_a.velocity.i_hat /= dampener
+                sprite_a.velocity.i_hat *= dampener
             if sprite_b.velocity.i_hat > 0:
-                sprite_b.velocity.i_hat /= dampener
+                sprite_b.velocity.i_hat *= dampener
         if above:
             if sprite_a.velocity.j_hat > 0:
-                sprite_a.velocity.j_hat /= dampener
+                sprite_a.velocity.j_hat *= dampener
             if sprite_b.velocity.j_hat < 0:
-                sprite_b.velocity.j_hat /= dampener
+                sprite_b.velocity.j_hat *= dampener
         if below:
             if sprite_a.velocity.j_hat < 0:
-                sprite_a.velocity.j_hat /= dampener
+                sprite_a.velocity.j_hat *= dampener
             if sprite_b.velocity.j_hat > 0:
-                sprite_b.velocity.j_hat /= dampener
+                sprite_b.velocity.j_hat *= dampener
 
         sprite_a.apply_force(push_out)
         sprite_b.apply_force(opposite)
@@ -622,6 +630,12 @@ class DrawVectorLayer(Layer):
     def draw(self, screen):
         for sprite in self.group:
             x, y = sprite.collision_point
+            # dx, dy = sprite.get_collision_edge_point(.75)
+            # dx -= x
+            # dy -= y
+            # skeleton = Vector("skeleton", dx, dy)
+            # skeleton.draw(screen, self.VELOCITY_COLOR,
+            #               offset=(x, y))
             sprite.velocity.get_copy(
                 scale=self.VELOCITY_SCALE).draw(
                     screen, self.VELOCITY_COLOR,
@@ -650,13 +664,13 @@ class PhysicsInterface:
     def __init__(self, mass, elasticity):
         self.mass = mass
         self.elasticity = elasticity
-        self.friction = 0
+        self.friction = 0.0
 
         self.acceleration = Vector("acceleration", 0, 0)
         self.velocity = Vector("velocity", 0, 0)
         self.forces = []
 
-        self._grounded = False
+        self.ground = None
         self._last_collision_heading = "right"
 
         self.interface = {
@@ -679,7 +693,7 @@ class PhysicsInterface:
             r = self.rect.copy()
             r.topleft = 0, 0
 
-            return r
+        return r
 
     @property
     def collision_point(self):
@@ -761,13 +775,13 @@ class PhysicsInterface:
         draw.rect(screen, (255, 0, 0), r, 1)
 
     def is_grounded(self):
-        return self._grounded
+        return bool(self.ground)
 
-    def set_on_ground(self):
-        self._grounded = True
+    def set_on_ground(self, ground):
+        self.ground = ground
 
     def set_off_ground(self):
-        self._grounded = False
+        self.ground = None
 
     def apply_force(self, vector):
         # print(vector)
@@ -777,28 +791,19 @@ class PhysicsInterface:
     def apply_acceleration(self):
         self.acceleration = Vector.sum_forces(*self.forces)
         self.velocity.add(self.acceleration)
-        # self.velocity.round()
         self.forces = []
 
     def apply_velocity(self):
         scalar = 1 / self.mass
-        x1, y1 = self.collision_point
         movement = self.velocity.get_copy(scale=scalar)
         movement.name = "movement"
         self.move(movement.get_value())
-        x2, y2 = self.collision_point
-        print("---")
-        print(movement)
-        l = [round(i, 3) for i in (x1, y1, x2, y2)]
-        print(l)
-        print("\n---")
 
     def apply_friction(self, cof):
         friction = self.velocity.get_copy(scale=-1 * cof)
         friction.name = "friction"
-        # friction.round()
         self.apply_force(friction)
-        self.friction = friction
+        self.friction = cof
 
     def move(self, value):
         dx, dy = value

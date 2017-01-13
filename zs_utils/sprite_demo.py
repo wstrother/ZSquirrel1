@@ -20,36 +20,40 @@ class SpriteDemo(Layer):
         self.add_sub_layer(self.sprite_layer)
         self.context = ContextManager(self)
 
-        self.debug_layer = DebugLayer()
+        self.debug_layer = DebugLayer(self)
         self.debug_layer.model = self.model
         self.add_sub_layer(self.debug_layer)
 
         self.pause_menu = PauseMenu(self)
+        self.frame_advance = False
 
     def handle_controller(self):
         super(SpriteDemo, self).handle_controller()
 
+        if self.controller.commands[2].active:
+            self.frame_advance = not self.frame_advance
+
         devices = self.controller.devices
         start = devices["start"]
 
-        # if start.check() and not self.pause_menu.active:
-        #     self.queue_events(("pause",
-        #                        ("layer",
-        #                         self.pause_menu)))
-
-        if start.held:
-            if devices["a"].check():
-                self.sprite_layer.active = True
-            else:
-                self.sprite_layer.active = False
+        if not self.frame_advance:
+            pause_ok = not self.pause_menu.active
+            if start.check() and pause_ok:
+                self.queue_events(("pause",
+                                   ("layer",
+                                    self.pause_menu)))
         else:
-            self.sprite_layer.active = True
+            if start.held:
+                if devices["a"].check():
+                    self.sprite_layer.active = True
+                else:
+                    self.sprite_layer.active = False
+            else:
+                self.sprite_layer.active = True
 
     def populate(self):
         self.sprite_layer.toggle_wall_layer()
-        # self.sprite_layer.toggle_hitbox_layer()
-        # self.sprite_layer.toggle_vector_layer()
-        # self.debug_layer.visible = False
+        self.debug_layer.visible = False
 
         for controller in self.controllers:
             self.context.set_commands(controller)
@@ -60,8 +64,8 @@ class SpriteDemo(Layer):
             "player",
             spawn("player", position=(450, 100))
         )
-        # spawn("yoshi", position=(500, 300))
-        # spawn("yoshi", position=(200, 300))
+        spawn("yoshi", position=(500, 300))
+        spawn("yoshi", position=(200, 300))
 
     def reset_controllers(self):
         for sprite in self.main_group:
@@ -112,12 +116,13 @@ class ContextManager:
 
     @staticmethod
     def set_up_physics(layer, group):
-        a = 350, 350
-        b = 780, 480
-        walls = [Wall(a, b, True),
+        a = 350, 450
+        b = 750, 350
+        walls = [Wall(a, b, ground=True, friction=.5),
+                 Wall((160, 390), (160, 600)),
                  Wall((0, 600), (999, 600), True),
                  Wall((50, 0), (50, 600)),
-                 Wall((750, 600), (750, 0))]
+                 Wall((790, 600), (790, 0))]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
         layer.add_hitbox_layer(group)
@@ -173,7 +178,10 @@ class ContextManager:
         press_right = Step("press_right",
                            [lambda f: f[0][0] == 1])
         neutral = Step("neutral dpad",
-                       [lambda f: f[0][0] == 0])
+                       [lambda f: f[0] == (0, 0)])
+        press_up = Step("press_up",
+                        [lambda f: f[0][1] == -1])
+
         window = 20
         double_right = Command("double tap right",
                                [neutral, press_right, neutral, press_right],
@@ -181,10 +189,13 @@ class ContextManager:
         double_left = Command("double tap left",
                               [neutral, press_left, neutral, press_left],
                               ["dpad", "start"], window)
-        controller.commands.append(
-            double_left)
-        controller.commands.append(
-            double_right)
+        double_up = Command("double tap up",
+                            [neutral, press_up, neutral, press_up],
+                            ["dpad"], window)
+
+        for command in (double_right, double_left, double_up):
+            controller.commands.append(
+                command)
 
     def set_controller(self, sprite):
         sprite_dict = self.environment.get_value("_sprite_dict")
@@ -224,7 +235,7 @@ class SpriteDemoMachine(AnimationMachine):
             "press_direction", "press_jump", "press_down",
             "neutral_dpad", "v_acceleration_0", "ground_collision",
             "auto", "tap_direction", "press_opposite_direction",
-            "run_momentum"
+            "run_momentum", "falling"
         )
 
     @property
@@ -234,8 +245,12 @@ class SpriteDemoMachine(AnimationMachine):
 
     def on_tap_direction(self):
         if self.controller:
-            double_right, double_left = self.controller.commands
+            double_right, double_left = self.controller.commands[0:2]
             command = double_right.active or double_left.active
+
+            a, b = self.controller.devices["a"], self.controller.devices["b"]
+            if a.held > 20 and b.held > 20:
+                command = True
 
             return command
 
@@ -296,6 +311,9 @@ class SpriteDemoMachine(AnimationMachine):
             opposite = direction[0] * dpad.get_value()[0] == -1
             return opposite
 
+    def on_falling(self):
+        return not self.sprite.is_grounded()
+
     def on_auto(self):
         if self.sprite.graphics:
             return self.sprite.graphics.animation_completed()
@@ -311,7 +329,6 @@ class DemoSprite(CharacterSprite):
             if state == "jump_up" and self.is_grounded():
                 jump = self.Vector("jump", 0, -25)
                 self.apply_force(jump)
-                self.set_off_ground()
 
             if self.controller:
                 dpad = self.controller.devices["dpad"]
@@ -338,22 +355,27 @@ class DemoSprite(CharacterSprite):
                     "run": 2,
                     "run_stop": .5
                 }
+                BASE_SPEED = 5
+
                 if state in movement:
                     speed = movement[state]
                     if state in ("jump_up", "jump_apex", "jump_fall"):
                         dx = speed * x
                     elif state in ("jump_squat", "jump_land"):
-                        dx = self.friction.i_hat * -1
+                        dx = self.velocity.i_hat * self.friction
                     else:
-                        dx = movement[state] * self.direction[0]
+                        dx = movement[state] * self.direction[0] * self.friction * BASE_SPEED
 
                     move = self.Vector("move", dx, 0)
+                    if self.ground:
+                        move.rotate(self.ground.get_angle())
                     self.apply_force(move)
 
 
 class DebugLayer(HeadsUpDisplay):
-    def __init__(self, **kwargs):
+    def __init__(self, environment, **kwargs):
         super(DebugLayer, self).__init__("debug layer", **kwargs)
+        self.environment = environment
 
     @staticmethod
     def animation_machine_reporter():
@@ -415,7 +437,10 @@ class DebugLayer(HeadsUpDisplay):
                 player, self.animation_machine_reporter()),
             tools.make_reporter_sprite(
                 player, self.physics_reporter()
-            )
+            ),
+            tools.make_reporter_sprite(
+                self.environment,
+                lambda e: "FRAME_ADVANCE: {}".format(e.frame_advance))
         ]
         block = tools.ContainerSprite(
             "physics reporter box", reporters,
@@ -424,69 +449,6 @@ class DebugLayer(HeadsUpDisplay):
         )
         block.style = {"align_h": "c"}
         block.add(self.hud_group)
-        # self.physics_reporter(player)
-
-        # controller = self.get_value("_controller")
-        # frame_cache = CacheList(5)
-        # text_cache = CacheList(1)
-        #
-        # def report_frames(c):
-        #     if c.commands:
-        #         frames = c.commands[0].frames
-        #
-        #         text = {
-        #             (0, 0): "neutral",
-        #             (-1, 0): "left",
-        #             (1, 0): "right",
-        #             (1, 1): "down right",
-        #             (1, -1): "up right",
-        #             (0, 1): "down",
-        #             (0, -1): "up",
-        #             (-1, -1): "up left",
-        #             (-1, 1): "down left"
-        #         }
-        #
-        #         for f in frames:
-        #             if frame_cache:
-        #                 if f[0] != frame_cache[-1]:
-        #                     frame_cache.append(f[0])
-        #             else:
-        #                 frame_cache.append(f[0])
-        #
-        #         def get_line_changes(l):
-        #             last = None
-        #             out = []
-        #             for line in l:
-        #                 if line != last:
-        #                     last = line
-        #                     out.append(line)
-        #
-        #             return out
-        #
-        #         lines = [text[f[0]] for f in c.commands[0].frames]
-        #         return get_line_changes(lines)
-        #     else:
-        #         return ""
-        #
-        # frame_reporter = tools.make_reporter_sprite(
-        #     controller, report_frames
-        # )
-        #
-        # check_cache = CacheList(60)
-        #
-        # def report_commands(c):
-        #     lines = []
-        #     for command in c.commands:
-        #         check_cache.append(command.active)
-        #         line = "{}: {}".format(command.name, True in check_cache)
-        #         lines.append(line)
-        #
-        #     return lines
-        #
-        # command_reporter = tools.make_reporter_sprite(
-        #     controller, report_commands
-        # )
-        #
 
 
 class PauseMenu(Menu):

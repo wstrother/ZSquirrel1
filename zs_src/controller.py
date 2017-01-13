@@ -561,9 +561,8 @@ class ZsController:
             frames = list(zip(*device_frames))
             command.update(frames[-1])
 
-        if self.commands:
-            if self.commands[0].active and self.devices["dpad"].last_direction == (1, 0):
-                print(" fuck")
+            if command.active:
+                print(command.name)
 
     def update_frames(self):
         frame = []
