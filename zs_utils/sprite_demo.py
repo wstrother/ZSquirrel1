@@ -1,6 +1,7 @@
 from types import FunctionType, MethodType
 
 from zs_constants.sprite_demo import GRAVITY, COF
+from zs_src.camera import CameraLayer
 from zs_src.classes import CacheList
 from zs_src.controller import Command, Step
 from zs_src.entities import Layer
@@ -17,7 +18,7 @@ class SpriteDemo(Layer):
         self.main_group = self.make_group()
         self.sprite_layer = PhysicsLayer(
             GRAVITY, COF, "sprite demo physics layer")
-        self.add_sub_layer(self.sprite_layer)
+        self.camera_layer = CameraLayer("camera layer")
         self.context = ContextManager(self)
 
         self.debug_layer = DebugLayer(self)
@@ -30,8 +31,9 @@ class SpriteDemo(Layer):
     def handle_controller(self):
         super(SpriteDemo, self).handle_controller()
 
-        if self.controller.commands[2].active:
-            self.frame_advance = not self.frame_advance
+        if self.controller.check_command("double tap up"):
+            if not self.pause_menu.active:
+                self.frame_advance = not self.frame_advance
 
         devices = self.controller.devices
         start = devices["start"]
@@ -51,12 +53,20 @@ class SpriteDemo(Layer):
             else:
                 self.sprite_layer.active = True
 
+        if self.sprite_layer.active:
+            for c in self.sprite_layer.controllers:
+                if c:
+                    c.update()
+
     def populate(self):
         self.sprite_layer.toggle_wall_layer()
         self.debug_layer.visible = False
 
         for controller in self.controllers:
             self.context.set_commands(controller)
+            self.sprite_layer.controllers.append(
+                controller.get_copy()
+            )
 
         spawn = self.context.spawn_sprite
 
@@ -64,8 +74,11 @@ class SpriteDemo(Layer):
             "player",
             spawn("player", position=(450, 100))
         )
-        spawn("yoshi", position=(500, 300))
-        spawn("yoshi", position=(200, 300))
+        # spawn("yoshi", position=(500, 300))
+        # spawn("yoshi", position=(200, 300))
+
+        self.camera_layer.set_tracking_sprite(
+            self.get_value("player"))
 
     def reset_controllers(self):
         for sprite in self.main_group:
@@ -87,15 +100,19 @@ class ContextManager:
         set_value = environment.set_value
         group = environment.main_group
         sprite_layer = environment.sprite_layer
+        camera_layer = environment.camera_layer
 
         set_value("_spawn", self.spawn_sprite)
         set_value("_sprite_dict", self.set_up_sprite_dict(group))
 
-        self.set_up_physics(sprite_layer, group)
-        self.set_up_layers()
+        camera_layer.add_sub_layer(sprite_layer)
+        self.environment.add_sub_layer(camera_layer)
 
-    def set_up_layers(self):
-        for layer in self.environment.sub_layers:
+        self.set_up_physics(sprite_layer, group)
+        self.set_up_layers(*camera_layer.sub_layers)
+
+    def set_up_layers(self, *layers):
+        for layer in layers:
             self.link_interface(layer)
 
             self.environment.set_value(
@@ -116,13 +133,15 @@ class ContextManager:
 
     @staticmethod
     def set_up_physics(layer, group):
-        a = 350, 450
-        b = 750, 350
-        walls = [Wall(a, b, ground=True, friction=.5),
+        a = 300, 300
+        b = 750, 450
+        walls = [Wall(a, b, ground=True),
                  Wall((160, 390), (160, 600)),
-                 Wall((0, 600), (999, 600), True),
-                 Wall((50, 0), (50, 600)),
-                 Wall((790, 600), (790, 0))]
+                 Wall((800, 450), (950, 360), True),
+                 Wall((1000, 370), (1130, 280), True),
+                 Wall((1200, 300), (1450, 250), True),
+                 Wall((1600, 290), (1790, 0), True),
+                 Wall((0, 600), (1999, 600), True)]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
         layer.add_hitbox_layer(group)
@@ -169,7 +188,7 @@ class ContextManager:
         sprite.set_up_animations(
             stream_file + ".gif",
             stream_file + ".txt",
-            animation_machine())
+            animation_machine)
 
     @staticmethod
     def set_commands(controller):
@@ -185,10 +204,10 @@ class ContextManager:
         window = 20
         double_right = Command("double tap right",
                                [neutral, press_right, neutral, press_right],
-                               ["dpad", "start"], window)
+                               ["dpad"], window)
         double_left = Command("double tap left",
                               [neutral, press_left, neutral, press_left],
-                              ["dpad", "start"], window)
+                              ["dpad"], window)
         double_up = Command("double tap up",
                             [neutral, press_up, neutral, press_up],
                             ["dpad"], window)
@@ -203,7 +222,7 @@ class ContextManager:
         controller = sprite_dict[name]["controller"]
 
         if type(controller) is int:
-            controller = self.environment.controllers[0]
+            controller = self.environment.sprite_layer.controllers[0]
 
         sprite.set_controller(controller)
 
@@ -228,8 +247,8 @@ class ContextManager:
 
 
 class SpriteDemoMachine(AnimationMachine):
-    def __init__(self):
-        super(SpriteDemoMachine, self).__init__("demo_sprite.txt")
+    def __init__(self, sprite):
+        super(SpriteDemoMachine, self).__init__("demo_sprite.txt", sprite)
 
         self.add_event_methods(
             "press_direction", "press_jump", "press_down",
@@ -245,14 +264,14 @@ class SpriteDemoMachine(AnimationMachine):
 
     def on_tap_direction(self):
         if self.controller:
-            double_right, double_left = self.controller.commands[0:2]
-            command = double_right.active or double_left.active
+            check = self.controller.check_command
+            tap = check("double tap left") or check("double tap right")
 
             a, b = self.controller.devices["a"], self.controller.devices["b"]
             if a.held > 20 and b.held > 20:
-                command = True
+                tap = True
 
-            return command
+            return tap
 
     def on_press_direction(self):
         if self.controller:
@@ -320,56 +339,85 @@ class SpriteDemoMachine(AnimationMachine):
 
 
 class DemoSprite(CharacterSprite):
+    def __init__(self, *args, **kwargs):
+        super(DemoSprite, self).__init__(*args, **kwargs)
+
+        if self.name == "player":
+            def check_b():
+                if self.controller:
+                    return self.controller.devices["b"].held
+
+            self.add_meter(
+                "jump", 10, True, check_b
+            )
+
+    @property
+    def dpad(self):
+        if self.controller:
+            return self.controller.devices["dpad"]
+
     def update(self, dt):
-        super(CharacterSprite, self).update(dt)
+        super(DemoSprite, self).update(dt)
+        BASE_JUMP = 5
+        BASE_SPEED = 5
+        right, left = self.RIGHT, self.LEFT
 
-        if self.animation_machine:
-            state = self.animation_machine.get_state().name
+        if self.animation_machine and self.controller:
+            state = self.get_animation_name()
+            frame_number = self.get_state_frame()
+            last = self.dpad.last_direction
+            x = self.dpad.get_direction()[0]
 
-            if state == "jump_up" and self.is_grounded():
-                jump = self.Vector("jump", 0, -25)
-                self.apply_force(jump)
+            if state == "jump_up" and frame_number < 5:
+                if frame_number == 0:
+                    dy = BASE_JUMP
+                else:
+                    jump_height = self.meters["jump"].get_ratio()
+                    jump_height += 3 / self.meters["jump"].maximum
 
-            if self.controller:
-                dpad = self.controller.devices["dpad"]
-                last = dpad.last_direction
-                x = dpad.get_direction()[0]
+                    dy = BASE_JUMP * jump_height
+                self.apply_force(self.get_jump_vector(dy))
 
-                if state in ("walk", "crouch_down", "crouch_idle", "crouch_up", "dash"):
-                    if state == "dash":
-                        if self.graphics.get_frame_number() == 0:
-                            if last in (self.RIGHT, self.LEFT):
-                                self.direction = last
-                    else:
-                        if last in (self.RIGHT, self.LEFT):
+            if state in ("walk", "jump_squat", "crouch_down", "crouch_idle", "crouch_up", "dash"):
+                if last in (right, left):
+                    if state == "dash" and frame_number == 0:
+                        self.direction = last
+                    elif state == "jump_squat":
+                        if abs(self.velocity.i_hat) < 1:
                             self.direction = last
-
-                movement = {
-                    "walk": 1,
-                    "jump_squat": .5,
-                    "jump_up": .5,
-                    "jump_apex": .5,
-                    "jump_fall": .5,
-                    "jump_land": .5,
-                    "dash": 2.5,
-                    "run": 2,
-                    "run_stop": .5
-                }
-                BASE_SPEED = 5
-
-                if state in movement:
-                    speed = movement[state]
-                    if state in ("jump_up", "jump_apex", "jump_fall"):
-                        dx = speed * x
-                    elif state in ("jump_squat", "jump_land"):
-                        dx = self.velocity.i_hat * self.friction
                     else:
-                        dx = movement[state] * self.direction[0] * self.friction * BASE_SPEED
+                        self.direction = last
 
-                    move = self.Vector("move", dx, 0)
-                    if self.ground:
-                        move.rotate(self.ground.get_angle())
-                    self.apply_force(move)
+            movement = {
+                "walk": 1,
+                "jump_squat": 0,
+                "jump_up": .5,
+                "jump_apex": .5,
+                "jump_fall": .5,
+                "jump_land": 0,
+                "dash": 2.5,
+                "run": 2,
+                "run_stop": .5,
+            }
+
+            if state in ("jump_up", "jump_apex", "jump_fall"):
+                dx = movement[state] * x
+            elif state in ("jump_squat", "jump_land"):
+                dx = self.get_ground_speed() * self.friction
+            elif state == "idle" or "crouch" in state:
+                dx = 0
+                if self.ground.get_angle() != 0:
+                    m = self.velocity.magnitude
+                    r = m / BASE_SPEED
+                    if r > 1:
+                        r = 1
+                    dx = self.get_slide_force() * (-1)
+                    dx -= (dx * (1 - r)) / (BASE_SPEED ** 2)
+            else:
+                dx = movement[state] * self.direction[0] * self.friction * BASE_SPEED
+
+            move = self.get_ground_vector(dx)
+            self.apply_force(move)
 
 
 class DebugLayer(HeadsUpDisplay):
@@ -471,6 +519,13 @@ class PauseMenu(Menu):
         # CHOOSE CONTROLLER
         # CHOOSE REPORTERS
 
+    def handle_controller(self):
+        super(PauseMenu, self).handle_controller()
+
+        if self.get_state() == "alive":
+            if self.controller.devices["start"].held == 1:
+                self.handle_event("die")
+
     def populate(self):
         self.model = self.environment.model
         self.controllers = self.environment.controllers
@@ -525,14 +580,16 @@ class PauseMenu(Menu):
         block.add_member_sprite(controller_option)
 
         def change_function():
-            controllers = self.environment.controllers
-            name = controller_option.text
-            i = [c.name for c in controllers].index
-            s = i(name)
+            sets = (self.environment.controllers,
+                    self.environment.sprite_layer.controllers)
+            for controllers in sets:
+                name = controller_option.text
+                i = [c.name for c in controllers].index
+                s = i(name)
 
-            a, b = controllers[0], controllers[s]
-            self.environment.controllers[0] = b
-            self.environment.controllers[s] = a
+                a, b = controllers[0], controllers[s]
+                controllers[0] = b
+                controllers[s] = a
             self.environment.reset_controllers()
 
         change_option = tools.TextOption("select")

@@ -71,10 +71,10 @@ class ZsStateMachine(ZsEventInterface):
 
 
 class AnimationMachine(ZsStateMachine):
-    def __init__(self, file_name):
+    def __init__(self, file_name, sprite):
         super(AnimationMachine, self).__init__("animation machine")
 
-        self.sprite = None
+        self.sprite = sprite
         self.buffer_state = None
 
         states = OrderedDict()

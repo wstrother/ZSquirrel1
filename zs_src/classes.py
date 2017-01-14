@@ -156,6 +156,8 @@ class Meter:
         return self.value
 
 
+# DEPRECATED!!!
+
 class StateMeter(Meter):
     """
     StateMeter creates an enumerable object out of a list of strings
@@ -284,6 +286,22 @@ class Timer(Meter):
 
     def on_switch_off(self):
         pass
+
+
+class ChargeMeter(Meter):
+    def __init__(self, name, maximum, check_func, clear_func=None):
+        super(ChargeMeter, self).__init__(name, maximum)
+        self.check = check_func
+        self.clear_func = clear_func
+
+    def update(self):
+        if self.check():
+            self.value += 1
+
+        else:
+            if self.value and self.clear_func:
+                self.clear_func(self)
+            self.reset()
 
 
 class Clock:

@@ -113,7 +113,7 @@ class ContainerSprite(GuiSprite):
                 "change_size", "change_member_size", self)
             sprite.parent = self
 
-            for group in self.groups():
+            for group in self.groups:
                 sprite.add(group)
         self.handle_event("change_member_size")
 

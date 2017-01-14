@@ -1,5 +1,7 @@
 from os.path import join
 
+ZS_UTILS = "zs_utils"
+
 RESOURCES = "resources"
 IMAGES = join(RESOURCES, "images")
 MAPS = join(RESOURCES, "maps")

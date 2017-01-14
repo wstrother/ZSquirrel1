@@ -7,7 +7,7 @@ class HeadsUpDisplay(Layer):
     def __init__(self, name, **kwargs):
         super(HeadsUpDisplay, self).__init__(name, **kwargs)
 
-        self.groups = [self.make_group(True)]
+        self.groups = [self.make_group()]
         self.hud_group = self.groups[0]
         self.tools = HudTools(self)
 
@@ -50,7 +50,7 @@ class Menu(Layer):
                                ("block", mb)))
 
     def set_menu_group(self):
-        self.groups = [self.make_group(True)]
+        self.groups = [self.make_group()]
 
     @property
     def menu_group(self):
@@ -491,6 +491,16 @@ class MenuTools(HudTools):
             if item.selectable:
                 event = function(item)
                 MenuTools.set_activation_event(item, event, target)
+
+    def set_auto_activation_events_trigger(self, trigger, block, function, target):
+        def set_activation_events():
+            event_method = getattr(block, "on_" + trigger)
+            event_method()
+            self.set_activation_events_for_block(
+                block, function, target
+            )
+        block.event_handler.set_event_method(
+            trigger, set_activation_events)
 
     def link_option_block_to_value(self, block, value_name):
         model = self.model

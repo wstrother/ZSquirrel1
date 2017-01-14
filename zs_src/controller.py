@@ -1,5 +1,6 @@
 import json
 from collections import OrderedDict
+from copy import deepcopy
 from math import sqrt
 from os.path import join
 
@@ -274,7 +275,7 @@ class InputManager:
     def make_controller(self, profile_name):
         profile = self.controller_profiles[profile_name]
 
-        return ZsController(profile_name, profile)
+        return ZsController(profile_name, profile, self)
 
     def load_profiles(self, names):
         for name in names:
@@ -297,7 +298,7 @@ class ZsInputDevice:
         self.controller = controller
 
     def get_frames(self):
-        return self.controller.get_frames(self.name)
+        return self.controller.get_device_frames(self.name)
 
     def get_value(self):
         if self.get_frames():
@@ -477,7 +478,7 @@ class Trigger(ZsInputDevice):
 class ZsController:
     Button, Dpad, ThumbStick, Trigger = Button, Dpad, ThumbStick, Trigger
 
-    def __init__(self, name, profile):
+    def __init__(self, name, profile, input_manager):
         self.name = name
         self.frames = CacheList(FRAME_SLICE_SIZE)
         self.commands = []
@@ -486,6 +487,14 @@ class ZsController:
         self.mapping_dict = {}
         self.profile = profile
         self.get_devices(profile)
+
+        self.input_manager = input_manager
+
+    def get_copy(self):
+        c = self.input_manager.make_controller(self.name)
+        c.commands = deepcopy(self.commands)
+
+        return c
 
     def get_devices(self, profile):
         for device in profile.devices:
@@ -542,7 +551,7 @@ class ZsController:
         self.mapping_dict[device.name] = mappings
         self.devices[device.name] = device
 
-    def get_frames(self, device_name):
+    def get_device_frames(self, device_name):
         output = []
         i = list(self.devices.keys()).index(device_name)
 
@@ -551,14 +560,26 @@ class ZsController:
 
         return output
 
+    def get_command_frames(self, *device_names):
+        device_frames = [self.get_device_frames(n) for n in device_names]
+        frames = tuple(zip(*device_frames))
+
+        return frames
+
+    def check_command(self, command_name):
+        commands = self.commands
+        i = [c.name for c in commands].index(command_name)
+
+        return commands[i].active
+
     def update(self):
         self.update_frames()
+
         for device in self.devices.values():
             device.update()
 
         for command in self.commands:
-            device_frames = [self.get_frames(n) for n in command.devices]
-            frames = list(zip(*device_frames))
+            frames = self.get_command_frames(*command.devices)
             command.update(frames[-1])
 
             if command.active:
@@ -571,7 +592,7 @@ class ZsController:
             m = self.mapping_dict[device.name]
 
             frame.append(device.get_input(m))
-        self.frames.append(frame)
+        self.frames.append(tuple(frame))
 
     def save_profile(self):
         cpf = self.profile.get_json_dict()

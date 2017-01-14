@@ -1,194 +1,92 @@
-# from zs_src.menus_gui import OptionBlockColumn, OptionBlock, TextOption, \
-#     MeterOption, TextFieldOption, SubBox, ChangeBlockOption
-# from zs_src.menus import Menu
-# from zs_src.gui import TextSprite
-from zs_src.animations import AnimationGraphics
-# from zs_src.graphics import Graphics
-# from zs_src.entities import ZsSprite, Layer
-# from zs_constants.paths import ANIMATIONS
-# from os.path import join
-import pygame
+from os import listdir
 
-
-class YoshiAnimation(AnimationGraphics):
-    def __init__(self, *args):
-        yoshi_sheet = pygame.image.load("resources/animations/yoshi.gif")
-        super(YoshiAnimation, self).__init__(yoshi_sheet, *args)
-
-        lines = "100 100 5\n0 0 50 60 20 20\n1 0\n2 0\n1 0\n0 0\n0 0\n1 0\n2 0\n3 0\n2 0"
-        lines = lines.split("\n")
-        self.set_animation("default", self.get_stream(lines))
-'''
-
-class TestSprite(ZsSprite):
-    def __init__(self, name, sprite_sheet, **kwargs):
-        super(TestSprite, self).__init__(name, **kwargs)
-        # self.graphics = AnimationGraphics(sprite_sheet, self)
-        self.graphics = YoshiAnimation(self)
-
-
-class SpriteSheetLayer(Layer):
-    def __init__(self, sprite_sheet, **kwargs):
-        super(SpriteSheetLayer, self).__init__("sprite sheet layer", **kwargs)
-
-        sprite_sheet.set_colorkey(sprite_sheet.get_at((0, 0)))
-        self.graphics = Graphics(self)
-        self.graphics.set_default_image(sprite_sheet)
-
-        self.sheet_size = self.image.get_size()
-        self.cell_size = 1, 1
-        self.starting_point = 0, 0
-        self.pointer = [0, 0]
-
-    def blit_to_screen(self, screen):
-        super(SpriteSheetLayer, self).blit_to_screen(screen)
-        px, py = self.starting_point
-
-        pointer_rect = pygame.Rect((0, 0), self.cell_size)
-        x, y = self.pointer
-        w, h = self.cell_size
-        x *= w
-        y *= h
-        pointer_rect.topleft = x + px, y + py
-
-        pygame.draw.rect(screen, (255, 0, 0), pointer_rect, 1)
+from zs_constants.paths import ANIMATION_STREAMS
+from zs_src.animations import StreamManager
+from zs_src.menus import Menu
+from zs_utils.debug_menu import DictEditor
 
 
 class AnimationMenu(Menu):
-    def __init__(self, file_name=None):
-        super(AnimationMenu, self).__init__("animation menu")
-
-        if not file_name:
-            file_name = "yoshi.gif"
-        sprite_sheet = pygame.image.load(join(ANIMATIONS, file_name))
-
-        self.sheet_layer = SpriteSheetLayer(sprite_sheet, position=(0, 300))
-        self.add_sub_layer(self.sheet_layer)
-
-        self.sprite = TestSprite("test sprite", sprite_sheet)
-
-        self.add_event_methods("set_cell_width", "set_cell_height",
-                               "set_start_x", "set_start_y")
-
-    def get_draw_order(self):
-        order = []
-
-        for layer in self.sub_layers:
-            order.append(layer)
-
-        for group in self.groups:
-            order.append(group)
-
-        return order
+    def __init__(self, **kwargs):
+        super(AnimationMenu, self).__init__("animation menu", **kwargs)
+        self.add_event_methods("load_sprite_menu")
 
     def populate(self):
-        mb = OptionBlockColumn("main block")
+        tools = self.tools
+        to = tools.TextOption
 
-        choose_animation = TextOption("Choose animation")
-        mb.add_member_sprite(choose_animation)
-        mb.add_sub_block(self.get_choose_animation_block(),
-                         (0, 0), self)
+        mb = tools.make_main_block()
+        for name in listdir(ANIMATION_STREAMS):
+            mb.add_member_sprite(to(name[:-4]))
 
-        edit_hitboxes = TextOption("Edit Hitboxes")
-        mb.add_member_sprite(edit_hitboxes)
+        def get_activation_event(o):
+            return ("load_sprite_menu",
+                    ("stream_file", o.text))
 
-        name = self.sprite.get_image_state()
-        if not name:
-            name = "default"
-        block = self.get_header_block(name)
-        edit_animation = ChangeBlockOption(block, self, "Edit " + name)
-        mb.add_member_sprite(edit_animation)
+        tools.set_activation_events_for_block(
+            mb, get_activation_event, self
+        )
 
-        self.add_main_block(mb)
+    def on_load_sprite_menu(self):
+        file_name = self.event.stream_file
 
-        sprite_box = SubBox(self, "sprite box",
-                            [[self.sprite]], position=(600, 0))
-        mb.add_sub_sprite(sprite_box, self)
+        layer = SpriteSheetMenu(
+            file_name + " menu", file_name,
+            position=(25, 25))
 
-    def get_choose_animation_block(self):
-        block = OptionBlockColumn("choose animation block", position=(200, 0))
-        image_sets = self.sprite.graphics.image_sets
+        pause = ("pause", ("layer", layer))
+        self.queue_events(pause)
 
-        for name in image_sets:
-            option = TextOption(name)
-            block.add_member_sprite(option)
-            change_animation = "change_sprite_animation state={}".format(name)
-            option.set_event_listener("activate", change_animation, self)
 
-        return block
+class SpriteSheetMenu(Menu):
+    def __init__(self, name, file_name, **kwargs):
+        super(SpriteSheetMenu, self).__init__(name, **kwargs)
+        self.file_name = file_name
+        self._stream = StreamManager(file_name + ".txt")
 
-    def get_header_block(self, name):
-        members = []
+        for name in self.stream_dict:
+            stream = self.stream_dict[name]
+            self.set_value(name, stream)
 
-        choose_name = TextFieldOption(name, 40)
-        members.append([choose_name])
+        self.add_event_methods("load_animation_editor")
 
-        width = MeterOption(200, 1)
-        members.append([width, TextSprite("width")])
-        width.set_event_listener("change_switch", "set_cell_width", self)
+    @property
+    def stream_dict(self):
+        return self._stream.stream_dict
 
-        height = MeterOption(200, 1)
-        members.append([height, TextSprite("height")])
-        height.set_event_listener("change_switch", "set_cell_height", self)
+    def populate(self):
+        tools = self.tools
 
-        max_x = self.sheet_layer.sheet_size[0]
-        max_y = self.sheet_layer.sheet_size[1]
+        mb = tools.make_main_block()
+        tools.link_value_to_member_column(
+            mb, "_value_names", tools.TextOption
+        )
 
-        start_x = MeterOption(max_x, 0)
-        start_y = MeterOption(max_y, 0)
+        def get_activation_event(o):
+            section = self.get_value(o.text)
+            return ("load_animation_editor",
+                    ("section", section))
 
-        members.append([start_x, TextSprite("Starting X")])
-        members.append([start_y, TextSprite("Starting Y")])
+        tools.set_auto_activation_events_trigger(
+            "change_linked_value", mb, get_activation_event,
+            self
+        )
 
-        start_x.set_event_listener("change_switch", "set_start_x", self)
-        start_y.set_event_listener("change_switch", "set_start_y", self)
+    def on_load_animation_editor(self):
+        section = self.event.section
+        d = {
+            "name": section.name,
+            "stream": section.stream,
+            "hitboxes": section.hitboxes
+        }
 
-        frames_block = self.get_frames_block()
-        add_frames = ChangeBlockOption(frames_block, self, "Add frames")
-        members.append([add_frames])
+        layer = AnimationEditor(
+            section.name + " animation editor",
+            model=d)
+        pause = ("pause", ("layer", layer))
+        self.queue_events(pause)
 
-        block = OptionBlock("header block", members, position=(300, 0), size=(250, 0))
-        block.style = {"align_h": "c"}
 
-        return block
+class AnimationEditor(DictEditor):
+    pass
 
-    def get_frames_block(self):
-        members = []
-        members.append(TextOption("New frame"))
-
-        block = OptionBlockColumn("frames block", members, position=(300, 0), size=(250, 0))
-
-        return block
-
-    def on_set_cell_width(self):
-        value = int(self.event.trigger.text)
-
-        sheet = self.sheet_layer
-        w, h = sheet.cell_size
-        w = value
-        sheet.cell_size = w, h
-
-    def on_set_cell_height(self):
-        value = int(self.event.trigger.text)
-
-        sheet = self.sheet_layer
-        w, h = sheet.cell_size
-        h = value
-        sheet.cell_size = w, h
-
-    def on_set_start_y(self):
-        value = int(self.event.trigger.text)
-
-        sheet = self.sheet_layer
-        x, y = sheet.starting_point
-        y = value
-        sheet.starting_point = x, y
-
-    def on_set_start_x(self):
-        value = int(self.event.trigger.text)
-
-        sheet = self.sheet_layer
-        x, y = sheet.starting_point
-        x = value
-        sheet.starting_point = x, y
-        '''

@@ -1,4 +1,4 @@
-from pygame import Surface
+from pygame import Surface, image
 from pygame.constants import SRCALPHA
 from pygame.transform import scale, flip
 
@@ -20,10 +20,7 @@ class ImageSet:
 
     def set_images(self, images):
         self.images = images
-
         self._meter = Meter(self.name, 0, maximum=len(images) - 1)
-        self.next = self._meter.next
-        self.prev = self._meter.prev
 
     @property
     def max_frame(self):
@@ -73,8 +70,8 @@ class Graphics:
     def add_image_set(self, name, images):
         self.image_sets[name] = ImageSet(name, images)
 
-    def draw(self, screen):
-        screen.blit(self.get_image(), (0, 0))
+    def draw(self, screen, offset=(0, 0)):
+        screen.blit(self.get_image(), offset)
 
     def get_image(self):
         s = self.get_image_set()
@@ -99,6 +96,15 @@ class Graphics:
 
     def reset_image(self):
         pass
+
+
+class IconGraphics(Graphics):
+    def __init__(self, entity, file_name):
+        self.file_name = file_name
+        super(IconGraphics, self).__init__(entity)
+
+    def reset_image(self):
+        self.set_default_image(image.load(self.file_name))
 
 
 class BgGraphics(Graphics):
@@ -151,7 +157,10 @@ class BgGraphics(Graphics):
     def tile(bg_image, surface):
         bg_hash = hash(bg_image)
         if bg_hash not in BgGraphics.PRE_RENDERS:
-            pr_surface = Surface(SCREEN_SIZE, SRCALPHA, 32)
+            sx, sy = SCREEN_SIZE
+            sx *= 2
+            sy *= 2
+            pr_surface = Surface((sx, sy), SRCALPHA, 32)
 
             w, h = pr_surface.get_size()
             img_w, img_h = bg_image.get_size()

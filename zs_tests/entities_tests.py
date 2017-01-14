@@ -1,8 +1,10 @@
-from zs_constants.zs import TRANSITION_TIME
-from zs_tests.zs_unit_test import ZsUnitTest
-from zs_src.entities import ZsEntity, ZsSprite, Layer
 from random import randint, seed
+
 from pygame.sprite import Group
+
+from zs_constants.zs import TRANSITION_TIME
+from zs_src.entities import ZsEntity, ZsSprite, Layer
+from zs_tests.zs_unit_test import ZsUnitTest
 
 
 class ZsEntityUnitTest(ZsUnitTest):
@@ -255,7 +257,7 @@ class LayerUnitTest(ZsUnitTest):
 
             def populate(self):
                 g1 = self.make_group()
-                g2 = self.make_group(True)
+                g2 = self.make_group()
                 self.test_groups = [g1, g2]
                 self.groups = [g1, g2]
 

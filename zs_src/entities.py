@@ -2,12 +2,10 @@ from sys import exit
 from types import MethodType
 
 from pygame.rect import Rect
-from pygame.sprite import Group, OrderedUpdates, Sprite
 
 from zs_constants.zs import SCREEN_SIZE, TRANSITION_TIME
 from zs_src.classes import StateMeter
 from zs_src.events import ZsEventInterface
-from zs_src.graphics import Graphics
 
 
 class Model(ZsEventInterface):
@@ -215,10 +213,7 @@ class ZsEntity(ZsEventInterface):
 
     @property
     def image(self):
-        try:
-            return self.graphics.get_image()
-        except AttributeError:
-            return Graphics.CLEAR_IMG
+        return self.graphics.get_image()
 
     @property
     def size(self):
@@ -262,6 +257,13 @@ class ZsEntity(ZsEventInterface):
 
     def adjust_position(self, value):
         self.rect.topleft = value
+
+    def move(self, value):
+        dx, dy = value
+        x, y = self.position
+        x += dx
+        y += dy
+        self.position = x, y
 
     def get_state(self):
         return self._state.state
@@ -319,6 +321,35 @@ class Layer(ZsEntity):
     method also calls the get_input() method which can reference any
     of the Controller objects in the 'controllers' list.
     """
+    class Group:
+        def __init__(self):
+            self._sprites = []
+
+        def __iter__(self):
+            return iter(self._sprites)
+
+        def update(self, *args):
+            for sprite in self._sprites:
+                sprite.update(*args)
+
+        def draw(self, screen, offset=(0, 0)):
+            for sprite in self._sprites:
+                if sprite.image:
+                    x, y = sprite.position
+                    dx, dy = offset
+                    x += dx
+                    y += dy
+                    position = round(x), round(y)
+                    screen.blit(sprite.image, position)
+
+        def add(self, sprite):
+            self._sprites.append(sprite)
+            sprite.groups.append(self)
+
+        def remove(self, sprite):
+            sprite.groups = [g for g in sprite.groups if g is not self]
+            self._sprites = [s for s in self._sprites if s is not sprite]
+
     def __init__(self, name, size=SCREEN_SIZE, position=(0, 0), model=None, controllers=None):
         super(Layer, self).__init__(name, size, position)
 
@@ -366,10 +397,8 @@ class Layer(ZsEntity):
             self.controllers.append(controller)
 
     @staticmethod
-    def make_group(ordered=False):
-        group = {True: OrderedUpdates, False: Group}[ordered]()
-
-        return group
+    def make_group():
+        return Layer.Group()
 
     def get_value(self, name):
         return self.model.values.get(name, None)
@@ -420,36 +449,53 @@ class Layer(ZsEntity):
     # the Layer object's rect attribute determines the region where the
     # layer will be drawn to the screen. Then all sub_layers are drawn
     # to this region recursively.
-    def draw(self, screen):
+    def draw(self, screen, offset=(0, 0)):
         sub_rect = self.rect.clip(screen.get_rect())
+
         try:
             sub_screen = screen.subsurface(sub_rect)
         except ValueError:      # if the layer's area is entirely outside of the screen's
             return              # area, it doesn't get drawn
 
-        # bg = self.get_background()
-        # if bg:
-        #     sub_screen.blit(bg, (0, 0))
-
-        self.blit_to_screen(sub_screen)
-
-    def blit_to_screen(self, screen):
-        for item in self.get_draw_order():
-            item.draw(screen)
-
-    def get_draw_order(self):
-        order = []
         if self.graphics:
-            order.append(self.graphics)
+            self.graphics.draw(screen, offset=offset)
 
-        for group in self.groups:
-            order.append(group)
+        if self.groups:
+            self.draw_sprites(sub_screen, offset=offset)
 
-        for layer in self.sub_layers:
-            if layer.visible:
-                order.append(layer)
+        if self.sub_layers:
+            for layer in self.sub_layers:
+                if layer.visible:
+                    layer.draw(sub_screen, offset=offset)
 
-        return order
+    def draw_sprites(self, screen, offset=(0, 0)):
+        for g in self.groups:
+            for sprite in g:
+                if sprite.image:
+                    x, y = sprite.position
+                    x += offset[0]
+                    y += offset[1]
+                    screen.blit(sprite.image, (x, y))
+
+    #     # self.blit_to_screen(sub_screen)
+    #
+    # def blit_to_screen(self, screen, offset=(0, 0)):
+    #     for item in self.get_draw_order():
+    #         item.draw(screen, offset=offset)
+    #
+    # def get_draw_order(self):
+    #     order = []
+    #     if self.graphics:
+    #         order.append(self.graphics)
+    #
+    #     for group in self.groups:
+    #         order.append(group)
+    #
+    #     for layer in self.sub_layers:
+    #         if layer.visible:
+    #             order.append(layer)
+    #
+    #     return order
 
     # the main() method is called by the Game object's main() method
     # each iteration of the loop (i.e. once per frame) if it is assigned
@@ -531,12 +577,13 @@ class SpawnMetaclass(type):
         return n
 
 
-class ZsSprite(ZsEntity, Sprite, metaclass=SpawnMetaclass):
+class ZsSprite(ZsEntity, metaclass=SpawnMetaclass):
     def __init__(self, name, size=(1, 1), position=(0, 0)):
-        Sprite.__init__(self)
+        # Sprite.__init__(self)
         ZsEntity.__init__(self, name, size, position)
 
         self.sub_sprites = []
+        self.groups = []
 
     @property
     def graphics(self):
@@ -557,9 +604,6 @@ class ZsSprite(ZsEntity, Sprite, metaclass=SpawnMetaclass):
     def reset_spawn(self, trigger=None):
         super(ZsSprite, self).reset_spawn(trigger)
 
-        # for sprite in self.sub_sprites:
-        #     sprite.reset_spawn()
-
     def reset_death(self, trigger=None):
         super(ZsSprite, self).reset_death(trigger)
 
@@ -573,20 +617,24 @@ class ZsSprite(ZsEntity, Sprite, metaclass=SpawnMetaclass):
 
     def on_death(self):
         super(ZsSprite, self).on_death()
-        self.kill()
+        self.remove(*self.groups)
 
     # the following methods are inherited from the pygame.Sprite class
     # for interfacing with the pygame.Group object, they ensure that
     # all sub_sprites are added and removed from the groups passed to
     # the add, remove and kill methods.
     def add(self, *groups):
-        super(ZsSprite, self).add(*groups)
+        # super(ZsSprite, self).add(*groups)
+        for group in groups:
+            group.add(self)
 
         for sprite in self.sub_sprites:
             sprite.add(*groups)
 
     def remove(self, *groups):
-        super(ZsSprite, self).remove(*groups)
+        # super(ZsSprite, self).remove(*groups)
+        for group in groups:
+            group.remove(self)
 
         for sprite in self.sub_sprites:
             sprite.remove(*groups)

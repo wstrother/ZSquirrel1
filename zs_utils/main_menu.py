@@ -1,6 +1,8 @@
-from zs_src.menus import Menu
 from os import listdir
+
 from launch_environment import get_environment
+from zs_constants.paths import ZS_UTILS
+from zs_src.menus import Menu
 
 
 class MainMenu(Menu):
@@ -12,7 +14,7 @@ class MainMenu(Menu):
         tools = self.tools
         mb = tools.make_main_block()
 
-        names = listdir("zs_utils")
+        names = listdir(ZS_UTILS)
         for name in names:
             if name[-3:] == ".py" and name != "main_menu.py":
                 o_name = name[:-3]
