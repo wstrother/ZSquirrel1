@@ -796,9 +796,9 @@ class PhysicsInterface:
         if self.ground:
             angle = self.ground.normal.get_angle()
         else:
-            angle = .25
+            angle = self.last_ground.normal.get_angle()
         jump = self.Vector(
-            "jump", 1 * dy, 0).rotate(angle)
+            "jump", 1 * dy, 0).rotate((angle + .25) / 2)
 
         return jump
 

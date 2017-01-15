@@ -34,5 +34,8 @@ class RectRegion(Region):
             rect.topleft, rect.topright,
             rect.bottomleft, rect.bottomright
         )
-        self.rect = rect
+        self._rect = rect
         super(RectRegion, self).__init__(name, points)
+
+    def get_rect(self):
+        return self._rect

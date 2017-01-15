@@ -33,12 +33,13 @@ class Game:
     def main_routine(self, clock=None):
         if clock:
             dt = clock.tick(self.frame_rate) / 1000
+            # print(dt)
         else:
             dt = 1
 
         environment = self.environment
 
-        self.screen.fill((0, 0, 0))
+        self.screen.fill((15, 15, 25))
         environment.main(dt, self.screen)
 
         t = environment.transition_to

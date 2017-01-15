@@ -1,4 +1,4 @@
-from pygame import Surface, image
+from pygame import Surface
 from pygame.constants import SRCALPHA
 from pygame.transform import scale, flip
 
@@ -99,12 +99,12 @@ class Graphics:
 
 
 class IconGraphics(Graphics):
-    def __init__(self, entity, file_name):
-        self.file_name = file_name
+    def __init__(self, entity, *images):
+        self.images = images
         super(IconGraphics, self).__init__(entity)
 
     def reset_image(self):
-        self.set_default_image(image.load(self.file_name))
+        self.set_default_image(*self.images)
 
 
 class BgGraphics(Graphics):

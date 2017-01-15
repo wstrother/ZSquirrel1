@@ -2,6 +2,7 @@ from types import FunctionType, MethodType
 
 from zs_constants.sprite_demo import GRAVITY, COF
 from zs_src.camera import CameraLayer
+from zs_src.camera import ParallaxBgLayer
 from zs_src.classes import CacheList
 from zs_src.controller import Command, Step
 from zs_src.entities import Layer
@@ -24,6 +25,8 @@ class SpriteDemo(Layer):
         self.debug_layer = DebugLayer(self)
         self.debug_layer.model = self.model
         self.add_sub_layer(self.debug_layer)
+        # self.camera_layer.add_sub_layer(
+        #     self.debug_layer)
 
         self.pause_menu = PauseMenu(self)
         self.frame_advance = False
@@ -60,7 +63,7 @@ class SpriteDemo(Layer):
 
     def populate(self):
         self.sprite_layer.toggle_wall_layer()
-        self.debug_layer.visible = False
+        # self.debug_layer.visible = False
 
         for controller in self.controllers:
             self.context.set_commands(controller)
@@ -70,15 +73,16 @@ class SpriteDemo(Layer):
 
         spawn = self.context.spawn_sprite
 
-        self.set_value(
-            "player",
-            spawn("player", position=(450, 100))
-        )
-        # spawn("yoshi", position=(500, 300))
-        # spawn("yoshi", position=(200, 300))
+        player = spawn("player", position=(450, 100))
+        self.set_value("player", player)
+        spawn("yoshi", position=(500, 300))
+        spawn("yoshi", position=(200, 300))
 
-        self.camera_layer.set_tracking_sprite(
-            self.get_value("player"))
+        window = self.camera_layer.camera.window
+        self.camera_layer.track_sprite_to_window(
+            player, window, 1 / 8)
+        self.camera_layer.track_sprite_heading_to_window(
+            player, window, 4 / 3)
 
     def reset_controllers(self):
         for sprite in self.main_group:
@@ -106,10 +110,11 @@ class ContextManager:
         set_value("_sprite_dict", self.set_up_sprite_dict(group))
 
         camera_layer.add_sub_layer(sprite_layer)
+        self.set_up_camera_layer(camera_layer)
         self.environment.add_sub_layer(camera_layer)
 
         self.set_up_physics(sprite_layer, group)
-        self.set_up_layers(*camera_layer.sub_layers)
+        self.set_up_layers(sprite_layer)
 
     def set_up_layers(self, *layers):
         for layer in layers:
@@ -132,15 +137,35 @@ class ContextManager:
                                      set_method)
 
     @staticmethod
+    def set_up_camera_layer(layer):
+        trees = "smalltree", "midtree", "bigtree"
+        get = ParallaxBgLayer.get_bg_image
+
+        def get_scale(name):
+            full_w = get("bigtree").get_size()[0]
+            w = get(name).get_size()[0]
+
+            return w / full_w
+
+        for tree in trees:
+            scale = get_scale(tree)
+            offset = 190
+            position = 0, offset * scale
+
+            layer.add_bg_layer(
+                tree, scale, buffer=(50, 0),
+                wrap=(True, False), position=position)
+
+    @staticmethod
     def set_up_physics(layer, group):
         a = 300, 300
         b = 750, 450
         walls = [Wall(a, b, ground=True),
                  Wall((160, 390), (160, 600)),
-                 Wall((800, 450), (950, 360), True),
-                 Wall((1000, 370), (1130, 280), True),
-                 Wall((1200, 300), (1450, 250), True),
-                 Wall((1600, 290), (1790, 0), True),
+                 Wall((800, 550), (1050, 360), True),
+                 Wall((1200, 470), (1430, 280), True),
+                 Wall((1620, 280), (2250, 150), True),
+                 Wall((2490, 90), (2790, -180), True),
                  Wall((0, 600), (1999, 600), True)]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
@@ -335,7 +360,7 @@ class SpriteDemoMachine(AnimationMachine):
 
     def on_auto(self):
         if self.sprite.graphics:
-            return self.sprite.graphics.animation_completed()
+            return self.sprite.animation_completed()
 
 
 class DemoSprite(CharacterSprite):
@@ -369,6 +394,7 @@ class DemoSprite(CharacterSprite):
             x = self.dpad.get_direction()[0]
 
             if state == "jump_up" and frame_number < 5:
+                print(frame_number)
                 if frame_number == 0:
                     dy = BASE_JUMP
                 else:
@@ -376,15 +402,27 @@ class DemoSprite(CharacterSprite):
                     jump_height += 3 / self.meters["jump"].maximum
 
                     dy = BASE_JUMP * jump_height
-                self.apply_force(self.get_jump_vector(dy))
+                jump = self.get_jump_vector(dy).rotate(
+                    (1 / 32) * -x)
 
-            if state in ("walk", "jump_squat", "crouch_down", "crouch_idle", "crouch_up", "dash"):
+                print(jump)
+                self.apply_force(jump)
+
+            if state in (
+                    "walk", "jump_squat", "crouch_down",
+                    "crouch_idle", "crouch_up", "dash", "pivot"):
                 if last in (right, left):
                     if state == "dash" and frame_number == 0:
                         self.direction = last
                     elif state == "jump_squat":
                         if abs(self.velocity.i_hat) < 1:
                             self.direction = last
+                    elif state == "pivot":
+                        if frame_number == self.graphics.get_frame_count():
+                            print("pivoting")
+                            dx, dy = self.direction
+                            dx *= -1
+                            self.direction = dx, dy
                     else:
                         self.direction = last
 
@@ -398,6 +436,7 @@ class DemoSprite(CharacterSprite):
                 "dash": 2.5,
                 "run": 2,
                 "run_stop": .5,
+                "pivot": .5
             }
 
             if state in ("jump_up", "jump_apex", "jump_fall"):
@@ -488,11 +527,15 @@ class DebugLayer(HeadsUpDisplay):
             ),
             tools.make_reporter_sprite(
                 self.environment,
-                lambda e: "FRAME_ADVANCE: {}".format(e.frame_advance))
+                lambda e: "FRAME_ADVANCE: {}".format(e.frame_advance)),
+            tools.make_reporter_sprite(
+                self.environment.camera_layer,
+                lambda l: "CAMERA_FOCUS: {}".format(l.camera.focus_point)
+            )
         ]
         block = tools.ContainerSprite(
             "physics reporter box", reporters,
-            size=(750, 100), table_style="cutoff 4",
+            size=(750, 100), table_style="cutoff 3",
             position=(25, 0)
         )
         block.style = {"align_h": "c"}

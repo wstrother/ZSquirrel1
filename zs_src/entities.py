@@ -164,6 +164,7 @@ class ZsEntity(ZsEventInterface):
         self._graphics = None
         self.parent = None
         self.child = None
+        self.visible = True
 
         self.spawn_time = TRANSITION_TIME
         self.death_time = TRANSITION_TIME
@@ -357,7 +358,6 @@ class Layer(ZsEntity):
         self.transition_to = None
         self.return_to = None
 
-        self.visible = True
         self.active = True
 
         if controllers:
@@ -370,6 +370,9 @@ class Layer(ZsEntity):
         self.model = Model(self.name + " model", model)
 
         self.add_event_methods("change_environment", "pause", "unpause")
+
+    def adjust_size(self, value):
+        self.rect.size = value
 
     # the populate method is meant to be overwritten by subclasses.
     # the PopulateMetaclass ensures that the populate() method is
@@ -471,31 +474,11 @@ class Layer(ZsEntity):
     def draw_sprites(self, screen, offset=(0, 0)):
         for g in self.groups:
             for sprite in g:
-                if sprite.image:
+                if sprite.image and sprite.visible:
                     x, y = sprite.position
                     x += offset[0]
                     y += offset[1]
                     screen.blit(sprite.image, (x, y))
-
-    #     # self.blit_to_screen(sub_screen)
-    #
-    # def blit_to_screen(self, screen, offset=(0, 0)):
-    #     for item in self.get_draw_order():
-    #         item.draw(screen, offset=offset)
-    #
-    # def get_draw_order(self):
-    #     order = []
-    #     if self.graphics:
-    #         order.append(self.graphics)
-    #
-    #     for group in self.groups:
-    #         order.append(group)
-    #
-    #     for layer in self.sub_layers:
-    #         if layer.visible:
-    #             order.append(layer)
-    #
-    #     return order
 
     # the main() method is called by the Game object's main() method
     # each iteration of the loop (i.e. once per frame) if it is assigned

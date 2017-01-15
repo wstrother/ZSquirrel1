@@ -30,6 +30,12 @@ class AnimationGraphics(Graphics):
         else:
             return self.entity.rect
 
+    def get_frame_count(self):
+        if self.get_image_set():
+            return self.get_image_set().frame_count
+        else:
+            return 0
+
     def get_frame_number(self):
         if self.get_image_set():
             return self.get_image_set().current_frame
@@ -105,6 +111,10 @@ class Animation(ImageSet):
         self._hitboxes = hitboxes
 
     @property
+    def frame_count(self):
+        return len(self.images)
+
+    @property
     def hitbox(self):
         return self.hitboxes[0]
 
@@ -149,6 +159,7 @@ class Animation(ImageSet):
         cw, ch = sprite_sheet.get_size()
 
         for frame in self._stream[1:]:
+            print(frame)
             x, y = frame[0]
             x *= w
             y *= h
@@ -181,6 +192,7 @@ class StreamManager:
         stream = section.stream
         hitboxes = section.hitboxes
 
+        print(name)
         animation = Animation(
             name, sprite_sheet, stream,
             hitboxes, **kwargs

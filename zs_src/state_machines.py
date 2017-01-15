@@ -102,9 +102,10 @@ class AnimationMachine(ZsStateMachine):
             return self.sprite.controller
 
     def set_state(self, index):
-        super(AnimationMachine, self).set_state(index)
-
+        self.sprite.state_frame = 0
         self.sprite.graphics.reset_animations()
+
+        super(AnimationMachine, self).set_state(index)
 
     def set_up_states(self, state_dict):
         def get_index(key):

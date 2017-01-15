@@ -18,18 +18,18 @@ class AnimationSprite(ZsSprite):
 
     def set_up_animations(self, sprite_sheet, stream_file, animation_machine):
         self.animation_machine = animation_machine(self)
-
-        self.graphics = self.graphics_class(sprite_sheet, stream_file, self, self.get_image_state)
-        # self.graphics.set_up_animations(stream_file)
+        self.graphics = self.graphics_class(
+            sprite_sheet, stream_file, self,
+            self.get_image_state)
 
         self.set_rect_size_to_image()
 
     def update(self, dt):
         super(AnimationSprite, self).update(dt)
-        # print(self.collision_region)
 
         if self.animation_machine:
             self.animation_machine.update()
+
             if self.get_animation_name() != self.last_state:
                 self.state_frame = 0
             else:
@@ -47,6 +47,10 @@ class AnimationSprite(ZsSprite):
 
     def get_state_frame(self):
         return self.state_frame
+
+    def animation_completed(self):
+        if self.graphics:
+            return self.get_state_frame() >= self.graphics.get_frame_count()
 
     def get_image_state(self):
         try:
