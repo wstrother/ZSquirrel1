@@ -1,6 +1,7 @@
 from types import FunctionType, MethodType
 
 from zs_constants.sprite_demo import GRAVITY, COF
+from zs_constants.zs import SCREEN_SIZE
 from zs_src.camera import CameraLayer
 from zs_src.camera import ParallaxBgLayer
 from zs_src.classes import CacheList
@@ -8,6 +9,7 @@ from zs_src.controller import Command, Step
 from zs_src.entities import Layer
 from zs_src.menus import HeadsUpDisplay, Menu
 from zs_src.physics import PhysicsLayer, Wall
+from zs_src.resource_library import get_resources
 from zs_src.sprites import CharacterSprite
 from zs_src.state_machines import AnimationMachine
 from zs_utils.debug_menu import DictEditor
@@ -17,10 +19,15 @@ class SpriteDemo(Layer):
     def __init__(self, **kwargs):
         super(SpriteDemo, self).__init__("sprite demo", **kwargs)
         self.main_group = self.make_group()
+        self.context = ContextManager(self)
+
+        self.camera_layer = CameraLayer("camera layer")
+        self.add_sub_layer(self.camera_layer)
+
         self.sprite_layer = PhysicsLayer(
             GRAVITY, COF, "sprite demo physics layer")
-        self.camera_layer = CameraLayer("camera layer")
-        self.context = ContextManager(self)
+        self.camera_layer.add_sub_layer(
+            self.sprite_layer)
 
         self.debug_layer = DebugLayer(self)
         self.debug_layer.model = self.model
@@ -30,6 +37,7 @@ class SpriteDemo(Layer):
 
         self.pause_menu = PauseMenu(self)
         self.frame_advance = False
+        self.paused = False
 
     def handle_controller(self):
         super(SpriteDemo, self).handle_controller()
@@ -40,9 +48,9 @@ class SpriteDemo(Layer):
 
         devices = self.controller.devices
         start = devices["start"]
+        pause_ok = not self.pause_menu.active
 
         if not self.frame_advance:
-            pause_ok = not self.pause_menu.active
             if start.check() and pause_ok:
                 self.queue_events(("pause",
                                    ("layer",
@@ -50,79 +58,84 @@ class SpriteDemo(Layer):
         else:
             if start.held:
                 if devices["a"].check():
-                    self.sprite_layer.active = True
+                    self.camera_layer.active = True
                 else:
-                    self.sprite_layer.active = False
+                    self.camera_layer.active = False
             else:
-                self.sprite_layer.active = True
+                self.camera_layer.active = True
 
-        if self.sprite_layer.active:
+        if not self.paused:
             for c in self.sprite_layer.controllers:
                 if c:
                     c.update()
 
     def populate(self):
-        self.sprite_layer.toggle_wall_layer()
-        # self.debug_layer.visible = False
-
-        for controller in self.controllers:
-            self.context.set_commands(controller)
-            self.sprite_layer.controllers.append(
-                controller.get_copy()
-            )
-
+        # # REPLACE WITH DATA FROM CONFIG VALUE FILE LOOKUP
         spawn = self.context.spawn_sprite
 
-        player = spawn("player", position=(450, 100))
-        self.set_value("player", player)
         spawn("yoshi", position=(500, 300))
         spawn("yoshi", position=(200, 300))
 
+        player = spawn("player", position=(450, 100))
+        self.set_value("player", player)
+
+    def reset_controllers(self):
+        for sprite in self.main_group:
+            self.context.set_sprite_controller(sprite)
+
+    def on_spawn(self):
+        context = self.context
+        context.set_up_controllers()
+
+        self.set_value(
+            "_spawn", context.spawn_sprite)
+        self.set_value(
+            "_sprite_dict", context.set_up_sprite_dict())
+
+        super(SpriteDemo, self).on_spawn()
+
+        camera_layer = self.camera_layer
+        sprite_layer = self.sprite_layer
+        debug_layer = self.debug_layer
+
+        context.set_up_bg_layers(camera_layer)
+        context.set_up_collisions(sprite_layer)
+        context.set_up_layers(
+            sprite_layer, debug_layer, camera_layer)
+
+        player = self.get_value("player")
         window = self.camera_layer.camera.window
         self.camera_layer.track_sprite_to_window(
             player, window, 1 / 8)
         self.camera_layer.track_sprite_heading_to_window(
             player, window, 4 / 3)
 
-    def reset_controllers(self):
-        for sprite in self.main_group:
-            self.context.set_controller(sprite)
-
     def on_pause(self):
+        self.paused = True
         super(SpriteDemo, self).on_pause()
-        self.sprite_layer.active = False
+        self.camera_layer.active = False
 
     def on_unpause(self):
+        self.paused = False
         super(SpriteDemo, self).on_unpause()
-        self.sprite_layer.active = True
+        self.camera_layer.active = True
 
 
 class ContextManager:
     def __init__(self, environment):
         self.environment = environment
-
-        set_value = environment.set_value
-        group = environment.main_group
-        sprite_layer = environment.sprite_layer
-        camera_layer = environment.camera_layer
-
-        set_value("_spawn", self.spawn_sprite)
-        set_value("_sprite_dict", self.set_up_sprite_dict(group))
-
-        camera_layer.add_sub_layer(sprite_layer)
-        self.set_up_camera_layer(camera_layer)
-        self.environment.add_sub_layer(camera_layer)
-
-        self.set_up_physics(sprite_layer, group)
-        self.set_up_layers(sprite_layer)
+        self.model = environment.model
+        self.set_value = environment.set_value
+        self.get_value = environment.get_value
 
     def set_up_layers(self, *layers):
         for layer in layers:
-            self.link_interface(layer)
+            if hasattr(layer, "interface"):
+                self.link_interface(layer)
 
-            self.environment.set_value(
-                "_" + layer.name, layer.interface
-            )
+                self.environment.set_value(
+                    "_" + layer.name, layer.interface
+                )
 
     def link_interface(self, obj):
         model = self.environment.model
@@ -137,7 +150,7 @@ class ContextManager:
                                      set_method)
 
     @staticmethod
-    def set_up_camera_layer(layer):
+    def set_up_bg_layers(layer):
         trees = "smalltree", "midtree", "bigtree"
         get = ParallaxBgLayer.get_bg_image
 
@@ -149,35 +162,41 @@ class ContextManager:
 
         for tree in trees:
             scale = get_scale(tree)
-            offset = 190
-            position = 0, offset * scale
+            offset = 250
+            depth = 30
+            position = 0, (depth * scale) + offset
 
             layer.add_bg_layer(
                 tree, scale, buffer=(50, 0),
                 wrap=(True, False), position=position)
 
-    @staticmethod
-    def set_up_physics(layer, group):
+    def set_up_collisions(self, layer):
+        group = self.environment.main_group
         a = 300, 300
         b = 750, 450
         walls = [Wall(a, b, ground=True),
-                 Wall((160, 390), (160, 600)),
+                 Wall((160, 390), (160, 750)),
                  Wall((800, 550), (1050, 360), True),
+                 Wall((1050, 360), (800, 550)),
                  Wall((1200, 470), (1430, 280), True),
                  Wall((1620, 280), (2250, 150), True),
                  Wall((2490, 90), (2790, -180), True),
-                 Wall((0, 600), (1999, 600), True)]
+                 Wall((2200, -120), (2500, -220), True),
+                 Wall((2500, -220), (2200, -120)),
+                 Wall((0, 720), (1999, 720), True)]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
         layer.add_hitbox_layer(group)
         layer.add_vector_layer(group)
 
+        # SPRITE COLLISION SYSTEM
         layer.collision_systems.append(
             [layer.group_perm_collision_check,
              (group, layer.sprite_collision,
               layer.handle_collision)]
         )
 
+        #
         layer.collision_systems.append(
             [layer.group_regions_collision_check,
              (group, walls, layer.wall_collision,
@@ -185,38 +204,7 @@ class ContextManager:
         )
 
     @staticmethod
-    def set_up_sprite_dict(group):
-        d = {
-            "player": {
-                "load": lambda **kwargs: DemoSprite("player", **kwargs),
-                "controller": 0,
-                "graphics": "squirrel",
-                "animation_machine": SpriteDemoMachine,
-                "group": group},
-            "yoshi": {
-                "load": lambda **kwargs: DemoSprite("yoshi", **kwargs),
-                "controller": None,
-                "graphics": "yoshi",
-                "animation_machine": SpriteDemoMachine,
-                "group": group}
-        }
-
-        return d
-
-    def set_graphics(self, sprite):
-        sprite_dict = self.environment.get_value("_sprite_dict")
-        name = sprite.name
-        d = sprite_dict[name]
-        stream_file = d["graphics"]
-        animation_machine = d["animation_machine"]
-
-        sprite.set_up_animations(
-            stream_file + ".gif",
-            stream_file + ".txt",
-            animation_machine)
-
-    @staticmethod
-    def set_commands(controller):
+    def set_up_commands(controller):
         press_left = Step("press_left",
                           [lambda f: f[0][0] == -1])
         press_right = Step("press_right",
@@ -241,13 +229,59 @@ class ContextManager:
             controller.commands.append(
                 command)
 
-    def set_controller(self, sprite):
+    def set_up_controllers(self):
+        for controller in self.environment.controllers:
+            self.set_up_commands(controller)
+            self.environment.sprite_layer.controllers.append(
+                controller.get_copy())
+
+    def set_up_sprite_dict(self):
+        group = self.environment.main_group
+
+        d = {
+            "player": {
+                "load": lambda **kwargs: DemoSprite("player", **kwargs),
+                "controller": 0,
+                "graphics": "squirrel",
+                "animation_machine": SpriteDemoMachine,
+                "group": group},
+            "yoshi": {
+                "load": lambda **kwargs: DemoSprite("yoshi", **kwargs),
+                "controller": None,
+                "graphics": "yoshi",
+                "animation_machine": SpriteDemoMachine,
+                "group": group},
+            "squirrel2": {
+                "load": lambda **kwargs: DemoSprite("squirrel2", **kwargs),
+                "controller": 1,
+                "graphics": "squirrel2",
+                "animation_machine": SpriteDemoMachine,
+                "group": group}
+        }
+
+        return d
+
+    def set_graphics(self, sprite):
         sprite_dict = self.environment.get_value("_sprite_dict")
         name = sprite.name
-        controller = sprite_dict[name]["controller"]
+        d = sprite_dict[name]
+        stream_file = d["graphics"]
+        animation_machine = d["animation_machine"]
 
-        if type(controller) is int:
-            controller = self.environment.sprite_layer.controllers[0]
+        sprite.set_up_animations(
+            stream_file + ".gif",
+            stream_file + ".txt",
+            animation_machine)
+
+    def set_sprite_controller(self, sprite):
+        sprite_dict = self.environment.get_value("_sprite_dict")
+        name = sprite.name
+        n = sprite_dict[name]["controller"]
+
+        if type(n) is int:
+            controller = self.environment.sprite_layer.controllers[n]
+        else:
+            controller = None
 
         sprite.set_controller(controller)
 
@@ -266,7 +300,7 @@ class ContextManager:
 
         self.link_interface(sprite)
         self.set_graphics(sprite)
-        self.set_controller(sprite)
+        self.set_sprite_controller(sprite)
 
         return sprite
 
@@ -367,14 +401,29 @@ class DemoSprite(CharacterSprite):
     def __init__(self, *args, **kwargs):
         super(DemoSprite, self).__init__(*args, **kwargs)
 
-        if self.name == "player":
-            def check_b():
-                if self.controller:
-                    return self.controller.devices["b"].held
+        sounds = get_resources("demo_sounds")
 
-            self.add_meter(
-                "jump", 10, True, check_b
-            )
+        def play(key):
+            s = sounds[key + ".ogg"]
+            s.set_volume(.1)
+            s.play()
+            # pass
+
+        def stop(key):
+            s = sounds[key + ".ogg"]
+            s.stop()
+            # pass
+
+        self.play_sound = play
+        self.stop_sound = stop
+
+        def check_b():
+            if self.controller:
+                return self.controller.devices["b"].held
+
+        self.add_meter(
+            "jump", 10, True, check_b
+        )
 
     @property
     def dpad(self):
@@ -383,8 +432,9 @@ class DemoSprite(CharacterSprite):
 
     def update(self, dt):
         super(DemoSprite, self).update(dt)
-        BASE_JUMP = 5
-        BASE_SPEED = 5
+
+        base_jump = 5
+        base_speed = 5
         right, left = self.RIGHT, self.LEFT
 
         if self.animation_machine and self.controller:
@@ -393,21 +443,29 @@ class DemoSprite(CharacterSprite):
             last = self.dpad.last_direction
             x = self.dpad.get_direction()[0]
 
+            # PLAY SOUNDS
+            if state in ("jump_squat", "walk", "run", "dash", "run_stop"):
+                if self.get_animation_frame() == 0:
+                    self.play_sound(state)
+            for name in ("walk", "run", "dash", "run_stop"):
+                if state != name:
+                    self.stop_sound(name)
+
+            # JUMP
             if state == "jump_up" and frame_number < 5:
-                print(frame_number)
                 if frame_number == 0:
-                    dy = BASE_JUMP
+                    dy = base_jump
                 else:
                     jump_height = self.meters["jump"].get_ratio()
                     jump_height += 3 / self.meters["jump"].maximum
 
-                    dy = BASE_JUMP * jump_height
+                    dy = base_jump * jump_height
                 jump = self.get_jump_vector(dy).rotate(
                     (1 / 32) * -x)
 
-                print(jump)
                 self.apply_force(jump)
 
+            # FACE DIRECTION
             if state in (
                     "walk", "jump_squat", "crouch_down",
                     "crouch_idle", "crouch_up", "dash", "pivot"):
@@ -418,14 +476,14 @@ class DemoSprite(CharacterSprite):
                         if abs(self.velocity.i_hat) < 1:
                             self.direction = last
                     elif state == "pivot":
-                        if frame_number == self.graphics.get_frame_count():
-                            print("pivoting")
+                        if frame_number == self.graphics.get_frame_count() - 1:
                             dx, dy = self.direction
                             dx *= -1
                             self.direction = dx, dy
                     else:
                         self.direction = last
 
+            # MOVEMENT SPEED
             movement = {
                 "walk": 1,
                 "jump_squat": 0,
@@ -435,6 +493,7 @@ class DemoSprite(CharacterSprite):
                 "jump_land": 0,
                 "dash": 2.5,
                 "run": 2,
+                "run_slow": 2.5,
                 "run_stop": .5,
                 "pivot": .5
             }
@@ -447,13 +506,16 @@ class DemoSprite(CharacterSprite):
                 dx = 0
                 if self.ground.get_angle() != 0:
                     m = self.velocity.magnitude
-                    r = m / BASE_SPEED
+                    r = m / base_speed
                     if r > 1:
                         r = 1
                     dx = self.get_slide_force() * (-1)
-                    dx -= (dx * (1 - r)) / (BASE_SPEED ** 2)
+                    dx -= (dx * (1 - r)) / (base_speed ** 2)
             else:
-                dx = movement[state] * self.direction[0] * self.friction * BASE_SPEED
+                if state == "dash" and frame_number == 0:
+                    self.velocity.i_hat = 0
+                    self.velocity.j_hat = 0
+                dx = movement[state] * self.direction[0] * self.friction * base_speed
 
             move = self.get_ground_vector(dx)
             self.apply_force(move)
@@ -461,8 +523,18 @@ class DemoSprite(CharacterSprite):
 
 class DebugLayer(HeadsUpDisplay):
     def __init__(self, environment, **kwargs):
-        super(DebugLayer, self).__init__("debug layer", **kwargs)
+        super(DebugLayer, self).__init__(environment.name + " debug layer", **kwargs)
         self.environment = environment
+
+        def toggle_visible():
+            self.visible = not self.visible
+
+        self.interface = {
+            "Toggle debug layer": toggle_visible,
+        }
+
+    def set_hi(self, value):
+        print(value)
 
     @staticmethod
     def animation_machine_reporter():
@@ -517,6 +589,13 @@ class DebugLayer(HeadsUpDisplay):
 
     def populate(self):
         tools = self.tools
+        w, h = SCREEN_SIZE
+        w -= 50
+        print(w)
+        if w > 750:
+            cutoff = 4
+        else:
+            cutoff = 3
 
         player = self.get_value("player")
         reporters = [
@@ -535,7 +614,7 @@ class DebugLayer(HeadsUpDisplay):
         ]
         block = tools.ContainerSprite(
             "physics reporter box", reporters,
-            size=(750, 100), table_style="cutoff 3",
+            size=(w, 0), table_style="cutoff {}".format(cutoff),
             position=(25, 0)
         )
         block.style = {"align_h": "c"}
@@ -547,7 +626,8 @@ class PauseMenu(Menu):
         super(PauseMenu, self).__init__("pause menu", **kwargs)
         self.add_event_methods(
             "load_sprite_editor", "load_physics_editor",
-            "update_sprite_dict", "update_physics")
+            "update_sprite_dict", "update_physics",
+            "load_debug_editor", "update_debug")
 
         self.active = False
         self.environment = environment
@@ -596,6 +676,12 @@ class PauseMenu(Menu):
             "Physics Layer Options", "load_physics_editor",
             self)
         mb.add_member_sprite(physics_option)
+
+        debug_option = tools.make_text_option(
+            "Debug Layer Options", "load_debug_editor",
+            self
+        )
+        mb.add_member_sprite(debug_option)
 
         controller_option = tools.TextOption(
             "Change Controller")
@@ -658,7 +744,6 @@ class PauseMenu(Menu):
 
         def spawn():
             name = sprite_option.text
-            print(name)
             load = self.get_value("_spawn")
             sx, sy = int(x_option.text), int(y_option.text)
 
@@ -724,9 +809,24 @@ class PauseMenu(Menu):
             "unpause", "update_physics",
             self, temp=True)
 
+    def on_load_debug_editor(self):
+        d = self.get_value("_sprite demo debug layer")
+        layer = DictEditor(
+            "debug editor", model=d)
+        load = ("pause",
+                ("layer", layer))
+        self.queue_events(load)
+        self.set_event_listener(
+            "unpause", "update_debug",
+            self, temp=True)
+
     def on_update_physics(self):
         d = self.get_return_value()
         self.set_value("_sprite demo physics layer", d)
+
+    def on_update_debug(self):
+        d = self.get_return_value()
+        self.set_value("_sprite demo debug layer", d)
 
     def on_update_sprite_dict(self):
         d = self.get_return_value()

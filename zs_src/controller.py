@@ -727,5 +727,3 @@ class Step:
         d, fw = self.description, self.frame_window
 
         return "{}, frame window: {}".format(d, fw)
-
-

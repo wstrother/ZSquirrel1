@@ -30,16 +30,19 @@ class SelectableInterface:
         return self.active
 
     def on_select(self):
-        pass
+        if not self.event.get("no_sound", False):
+            self.play_sound("select")
 
     def on_deselect(self):
         pass
 
     def on_activate(self):
-        pass
+        if not self.event.get("no_sound", False):
+            self.play_sound("activate")
 
     def on_return(self):
-        pass
+        if not self.event.get("no_sound", False):
+            self.play_sound("activate")
 
     def handle_controller(self, controller):
         activate = any([controller.devices[name].check() for name in ADVANCE])
@@ -89,8 +92,7 @@ class TextOption(SelectableInterface, TextSprite):
         color = self.style.colors["selected"]
         self.change_color("text", color)
 
-        if not self.event.get("no_sound", False):
-            self.play_sound("select")
+        super(TextOption, self).on_select()
 
     def on_deselect(self):
         color = self.style.colors["unselected"]
@@ -231,8 +233,8 @@ class TextField(TextOption):
         self.input_length = length
         self.prompt = ""
 
-    def reset_spawn(self, trigger=None):
-        super(TextField, self).reset_spawn(trigger)
+    def on_spawn(self):
+        super(TextField, self).on_spawn()
         self.change_text(self.prompt)
 
     def handle_controller(self, controller):
@@ -292,9 +294,6 @@ class TextFieldOption(TextField):
         self.prompt = prompt
         self.set_event_listener("return", "activate")
 
-    def on_return(self):
-        pass
-
     def on_activate(self):
         if self.toggle_active():
             color = self.style.colors["active"]
@@ -303,6 +302,7 @@ class TextFieldOption(TextField):
             color = self.style.colors["selected"]
             self.control_freeze = False
 
+        self.play_sound("activate")
         self.change_color("text", color)
         self.reset_image()
 
@@ -426,8 +426,8 @@ class FunctionBlock(MenuBlock):
         self.function_called = False
         self.return_command_names = ""
 
-    def reset_spawn(self, trigger=None):
-        super(FunctionBlock, self).reset_spawn(trigger)
+    def on_spawn(self):
+        super(FunctionBlock, self).on_spawn()
         self.function_called = False
 
     def change_text(self, text):
@@ -487,10 +487,10 @@ class OptionBlock(MenuBlock):
 
         self.add_event_methods("change_option")
 
-    def reset_spawn(self, trigger=None):
-        super(OptionBlock, self).reset_spawn(trigger)
-        self.pointer = self.pointer_origin
+    def on_spawn(self):
+        super(OptionBlock, self).on_spawn()
 
+        self.pointer = self.pointer_origin
         ao = self.active_option
         if ao:
             self.queue_events(("change_option",

@@ -414,7 +414,8 @@ class PhysicsLayer(Layer):
             "gravity": g,
             "friction": cof,
             "toggle hitbox layer": self.toggle_hitbox_layer,
-            "toggle vector layer": self.toggle_vector_layer
+            "toggle vector layer": self.toggle_vector_layer,
+            "toggle walls layer": self.toggle_wall_layer
         }
 
     def set_gravity(self, g):
@@ -605,16 +606,21 @@ class PhysicsLayer(Layer):
 
 
 class DrawWallsLayer(Layer):
-    WALL_COLOR = (255, 255, 0)
+    GROUND_COLOR = (125, 125, 0)
+    WALL_COLOR = (100, 200, 0)
 
     def __init__(self, walls, **kwargs):
         super(DrawWallsLayer, self).__init__("draw walls layer", **kwargs)
         self.walls = walls
-        self.visible = False
+        self.visible = True
 
     def draw(self, screen, offset=(0, 0)):
         for wall in self.walls:
-            wall.draw(screen, self.WALL_COLOR, offset=offset)
+            if wall.ground:
+                color = self.GROUND_COLOR
+            else:
+                color = self.WALL_COLOR
+            wall.draw(screen, color, offset=offset)
 
 
 class DrawVectorLayer(Layer):

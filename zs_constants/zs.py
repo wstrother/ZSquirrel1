@@ -1,5 +1,5 @@
 
-SCREEN_SIZE = (1100, 600)
+SCREEN_SIZE = (800, 600)
 FRAME_RATE = 60
 GLOBAL_STYLE_DICT = "default"
 GLOBAL_RESOURCE_DICT = "r_dict"
@@ -9,5 +9,5 @@ REPR_SIG_FIGS = 3
 TRANSITION_TIME = 6
 TEXT_ANTI_ALIAS = 1
 DIALOG_POSITION = (300, 300)
-CONTROLLERS = ("dev_mode2", "dev_mode")
+CONTROLLERS = ("dev_mode2", "dev_mode", "xbox")
 

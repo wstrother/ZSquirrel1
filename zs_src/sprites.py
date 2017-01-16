@@ -50,7 +50,7 @@ class AnimationSprite(ZsSprite):
 
     def animation_completed(self):
         if self.graphics:
-            return self.get_state_frame() >= self.graphics.get_frame_count()
+            return self.get_state_frame() >= self.graphics.get_frame_count() - 1
 
     def get_image_state(self):
         try:

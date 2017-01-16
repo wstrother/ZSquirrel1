@@ -30,8 +30,8 @@ class Menu(Layer):
         self.model.values["_return"] = ""
         self.tools = MenuTools(self)
 
-    def reset_spawn(self, trigger=None):
-        super(Menu, self).reset_spawn(trigger)
+    def on_spawn(self):
+        super(Menu, self).on_spawn()
 
         self.return_block = None
         self.set_menu_group()
@@ -213,7 +213,8 @@ class Menu(Layer):
     def on_unpause(self):
         super(Menu, self).on_unpause()
         self.paused = False
-        self.reset_spawn(trigger=self.event)
+        self.handle_event(
+            ("spawn", ("trigger", self.event)))
 
 
 class HudTools:

@@ -67,8 +67,7 @@ def load_json(path, filename):
 
 class Style:
     DEFAULT_DICT = load_json(paths.STYLE_DICTS, GLOBAL_STYLE_DICT)     # default style_dict
-    R_DICT = load_json(paths.RESOURCE_DICTS, GLOBAL_RESOURCE_DICT)
-    RESOURCES = get_resources(R_DICT)
+    RESOURCES = get_resources(GLOBAL_RESOURCE_DICT)
     KEYS = (BG_STYLE,
             ALIGN_H,
             ALIGN_V,

@@ -21,7 +21,7 @@ class Game:
                 exit()
 
     def main(self):
-        self.environment.reset_spawn()
+        self.environment.handle_event("spawn")
 
         clock = pygame.time.Clock()
         while True:
@@ -51,6 +51,6 @@ class Game:
 
             t.controllers = self.input_manager.get_controllers()
             t.set_value("_return", return_value)
-            t.reset_spawn()
+            t.handle_event("spawn")
             t.game_environment = True
             self.environment = t

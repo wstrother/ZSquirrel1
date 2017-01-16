@@ -692,8 +692,9 @@ class MakeProfileMenu(Menu):
         d = {
             "name": self.profile_name,
             "devices": [d for d in devices if d]}
-        controller = ZsController(d["name"],
-                                  Profile.make_profile(d))
+        controller = ZsController(
+            d["name"], Profile.make_profile(d),
+            self.controller.input_manager)
 
         try:
             if not devices:

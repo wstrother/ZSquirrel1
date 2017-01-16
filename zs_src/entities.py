@@ -174,20 +174,6 @@ class ZsEntity(ZsEventInterface):
         events = "spawning", "birth", "dying", "death"
         self.cancel_events(*events)
 
-    def reset_spawn(self, trigger=None):
-        self.reset_transition_events()
-        spawning = ("spawning",
-                    ("duration", self.spawn_time),
-                    ("trigger", trigger))
-        self.queue_events(spawning, "birth")
-
-    def reset_death(self, trigger=None):
-        self.reset_transition_events()
-        dying = ("dying",
-                 ("duration", self.spawn_time),
-                 ("trigger", trigger))
-        self.queue_events(dying, "death")
-
     def __repr__(self):
         if self.name == "":
             name = self.__class__.__name__
@@ -290,7 +276,12 @@ class ZsEntity(ZsEventInterface):
         return [self.event_handler.update]
 
     def on_spawn(self):
-        self.reset_spawn(trigger=self.event)
+        self.reset_transition_events()
+
+        spawning = ("spawning",
+                    ("duration", self.spawn_time),
+                    ("trigger", self.event))
+        self.queue_events(spawning, "birth")
 
     def on_spawning(self):
         self.set_state(ZsEntity.STATES[0])
@@ -299,7 +290,11 @@ class ZsEntity(ZsEventInterface):
         self.set_state(ZsEntity.STATES[1])
 
     def on_die(self):
-        self.reset_death(trigger=self.event)
+        self.reset_transition_events()
+        dying = ("dying",
+                 ("duration", self.spawn_time),
+                 ("trigger", self.event))
+        self.queue_events(dying, "death")
 
     def on_dying(self):
         self.set_state(ZsEntity.STATES[2])
@@ -380,13 +375,13 @@ class Layer(ZsEntity):
     def populate(self):
         pass
 
-    def reset_spawn(self, trigger=None):
+    def on_spawn(self):
         self.populate()
-
         self.active = True
-        super(Layer, self).reset_spawn(trigger)
+
+        super(Layer, self).on_spawn()
         for layer in self.sub_layers:
-            layer.reset_spawn()
+            layer.handle_event("spawn")
 
     @property
     def controller(self):
@@ -552,10 +547,10 @@ class SpawnMetaclass(type):
     """
     def __call__(cls, *args, **kwargs):
         n = type.__call__(cls, *args, **kwargs)
-        if hasattr(n, "reset_spawn") and type(n.reset_spawn) is MethodType:
-            n.reset_spawn()
+        if hasattr(n, "on_spawn") and type(n.on_spawn) is MethodType:
+            n.handle_event("spawn")
         else:
-            raise AttributeError("class does not have 'reset_spawn' method")
+            raise AttributeError("class does not have 'on_spawn' method")
 
         return n
 
@@ -584,19 +579,17 @@ class ZsSprite(ZsEntity, metaclass=SpawnMetaclass):
         self.graphics.reset_image()
         self.set_rect_size_to_image()
 
-    def reset_spawn(self, trigger=None):
-        super(ZsSprite, self).reset_spawn(trigger)
-
-    def reset_death(self, trigger=None):
-        super(ZsSprite, self).reset_death(trigger)
+    def on_die(self):
+        super(ZsSprite, self).on_die()
 
         for sprite in self.sub_sprites:
-            sprite.reset_death()
+            sprite.handle_event("die")
 
     def on_spawn(self):
         super(ZsSprite, self).on_spawn()
-        group = self.event.group
-        self.add(group)
+        group = self.event.get("group")
+        if group:
+            self.add(group)
 
     def on_death(self):
         super(ZsSprite, self).on_death()
@@ -622,3 +615,6 @@ class ZsSprite(ZsEntity, metaclass=SpawnMetaclass):
         for sprite in self.sub_sprites:
             sprite.remove(*groups)
 
+    def kill(self):
+        for g in self.groups:
+            self.remove(g)

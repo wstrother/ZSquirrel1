@@ -47,7 +47,7 @@ class GuiSprite(StyleInterface, ZsSprite):
         sound = gs(key)
 
         sound.stop()
-        sound.set_volume(.1)
+        sound.set_volume(.3)
         sound.play()
 
     def change_color(self, key, value):
@@ -135,11 +135,11 @@ class ContainerSprite(GuiSprite):
             cutoff = int(table_style.split()[1])
             return GuimtCutoff(name, cutoff, members)
 
-    def reset_spawn(self, trigger=None):
-        super(ContainerSprite, self).reset_spawn(trigger)
+    def on_spawn(self):
+        super(ContainerSprite, self).on_spawn()
 
         for sprite in self.member_list:
-            sprite.reset_spawn()
+            sprite.handle_event("spawn")
 
     @property
     def members(self):

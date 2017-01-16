@@ -7,6 +7,8 @@ from zs_src.controller import InputManager
 from zs_src.game import Game
 
 pygame.init()
+pygame.mixer.quit()
+pygame.mixer.init(buffer=256)
 # sys.stdout = open("output.txt", "w")
 
 start_screen = pygame.display.set_mode(SCREEN_SIZE)
