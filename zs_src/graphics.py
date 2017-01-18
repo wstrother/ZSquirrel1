@@ -125,19 +125,33 @@ class BgGraphics(Graphics):
         s = self.entity.style
         size = self.entity.size
 
-        bg_color = s.colors[BG]
-        bg_image = s.get_image(BG)
+        if hasattr(self.entity, "bg_color"):
+            bg_color = self.entity.bg_color
+        else:
+            bg_color = s.colors["bg"]
+
+        if s.images["bg"]:
+            bg_image = s.get_image(BG)
+        else:
+            bg_image = None
+
         bg_style = s.bg_style
 
         surface = cg(size, bg_color)
-        image = bg(bg_image, surface, bg_style)
+        if bg_image and bg_style:
+            image = bg(bg_image, surface, bg_style)
+        else:
+            image = surface
 
         return image
 
     @staticmethod
     def make_color_image(size, color):
         s = Surface(size).convert()
-        s.fill(color)
+        if color:
+            s.fill(color)
+        else:
+            s.set_colorkey(s.get_at((0, 0)))
 
         return s
 
@@ -194,7 +208,7 @@ class BgGraphics(Graphics):
         surface.blit(bg_image, (x, y))
 
 
-class ContainerGraphics(Graphics):
+class ContainerGraphics(BgGraphics):
     PRE_RENDERS = {}
 
     def __init__(self, entity):
@@ -205,22 +219,13 @@ class ContainerGraphics(Graphics):
         self.set_default_image(self.get_container_image())
 
     def get_container_image(self):
-        cg, bg, contg = (
-            BgGraphics.make_color_image,
-            BgGraphics.make_bg_image,
-            self.make_border_image)
-
         entity = self.entity
-
         s = entity.style
+
         border_images = s.border_images
         sides, corners = s.border_style
-        bg_image, bg_style = s.bg_image, s.bg_style
-        bg_color = s.colors[BG]
-
-        surface = cg(entity.size, bg_color)
-        rect_image = bg(bg_image, surface, bg_style)
-        container_image = contg(
+        rect_image = self.get_bg_image()
+        container_image = self.make_border_image(
             border_images, rect_image, sides, corners)
 
         if ALPHA in s.colors:
@@ -332,7 +337,8 @@ class TextGraphics(Graphics):
         entity = self.entity
         s = entity.style
         buffer = s.buffers["text"]
-        color, font = s.colors["text"], s.get_font("main")
+        key = entity.font_name
+        color, font = s.colors["text"], s.get_font(key)
         text, cutoff, nl = entity.text, entity.cutoff, entity.nl
         image = self.make_text_image(text, cutoff, nl, buffer, font, color)
 

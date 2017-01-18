@@ -44,7 +44,7 @@ BORDER_V_SIDE = "border_v_side"
 SELECT = "select"
 ACTIVATE = "activate"
 
-BG_STYLES = (TILE, STRETCH, CENTER)
+BG_STYLES = (TILE, STRETCH, CENTER, "")
 ALIGNS_H = (L, C, R)
 ALIGNS_V = (T, C, B)
 BORDER_SIDE_CHOICES = (T, L, R, B)

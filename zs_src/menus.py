@@ -24,7 +24,6 @@ class Menu(Layer):
         self.main_block = None
         self.active_block = None
         self.return_block = None
-        self.paused = False
 
         self.model.values["_dialog"] = ""
         self.model.values["_return"] = ""
@@ -55,6 +54,10 @@ class Menu(Layer):
     @property
     def menu_group(self):
         return self.groups[0]
+
+    @property
+    def control_freeze(self):
+        return self.active_block.active_option.control_freeze
 
     def get_value_at_index(self, i):
         name = self.model.value_names[i]
@@ -97,18 +100,19 @@ class Menu(Layer):
         block = self.event.get("block")
         current = self.active_block
 
-        to_parent = self.event.get("to_parent", False)
-        to_child = self.event.get("to_child", False)
-        to_dialog = self.event.get("to_dialog", False)
+        to_parent = self.event.get("to_parent")
+        to_child = self.event.get("to_child")
+        to_dialog = self.event.get("to_dialog")
+
+        select, deselect = "select", "deselect"
 
         if to_dialog:
+            select = ("select", ("no_sound", True))
             self.return_block = current
 
         if to_child:
             deselect = ("deselect", ("no_hide", True))
             self.return_block = current
-        else:
-            deselect = "deselect"
 
         if not to_dialog:
             if hasattr(current, "active_option") and current.active_option:
@@ -119,8 +123,6 @@ class Menu(Layer):
                 current.pointer = current.pointer_origin
             select = ("select", ("no_show", True))
             self.return_block = block.parent
-        else:
-            select = "select"
 
         if self.event.get("trigger.name") == "return":
             select = ("select",
@@ -159,13 +161,18 @@ class Menu(Layer):
         if block:
             change_active_block = ("change_active_block",
                                    ("block", block),
-                                   ("to_parent", True))
+                                   ("to_parent", True),
+                                   ("trigger", self.event))
             self.handle_event(change_active_block)
 
         else:
-            self.tools.show_dialog(
-                "Leaving?", ("Yes", "No"),
-                "prompt_exit")
+            if self.game_environment:
+                self.tools.show_dialog(
+                    "Leaving?", ("Yes", "No"),
+                    "prompt_exit")
+
+            else:
+                self.queue_events("die")
 
     def on_show_dialog(self):
         block = self.event.block
@@ -176,6 +183,7 @@ class Menu(Layer):
         block.set_event_passer("return", self, temp=True)
         block.set_event_listener("return", "die", block, temp=True)
 
+        self.set_value("_dialog", "")
         conditional = "do_response"
         change_dialog = ("change_value",
                          ("value_name", "_dialog"),
@@ -207,14 +215,18 @@ class Menu(Layer):
 
     def on_pause(self):
         super(Menu, self).on_pause()
-        self.event.layer.controllers = self.controllers
-        self.paused = True
+        self.event.layer.copy_controllers(
+            self.controllers)
 
     def on_unpause(self):
         super(Menu, self).on_unpause()
-        self.paused = False
-        self.handle_event(
-            ("spawn", ("trigger", self.event)))
+        self.main_block.handle_event(
+            ("die",
+             ("trigger", self.event),
+             ("transition", False)))
+        self.main_block.set_event_listener(
+            "death", "spawn",
+            target=self, temp=True)
 
 
 class HudTools:
@@ -239,7 +251,7 @@ class HudTools:
 
         return ts
 
-    def link_value_to_sprite_members(self, sprite, value_name, function=None):
+    def link_value_to_sprite_members(self, sprite, value_name, function=None, update=None):
         model = self.model
 
         def change_method(value):
@@ -254,6 +266,10 @@ class HudTools:
                     new_row.append(item)
                 members.append(new_row)
 
+            if update:
+                for item in update():
+                    members.append(item)
+
             sprite.set_table(members)
             if sprite.active_option:
                 sprite.active_option.queue_events(
@@ -264,7 +280,7 @@ class HudTools:
         model.link_value(value_name, change_method)
         model.handle_change(value_name)
 
-    def link_value_to_member_column(self, sprite, value_name, function=None):
+    def link_value_to_member_column(self, sprite, value_name, function=None, update=None):
         model = self.model
 
         def change_function(value):
@@ -276,6 +292,10 @@ class HudTools:
                     members.append(item)
 
                 else:
+                    members.append(item)
+
+            if update:
+                for item in update():
                     members.append(item)
 
             sprite.set_table(members)
@@ -346,7 +366,9 @@ class MenuTools(HudTools):
     FunctionBlock = menus_gui.FunctionBlock
 
     def make_main_block(self, **kwargs):
-        main_block = self.OptionBlock("main block", **kwargs)
+        main_block = self.OptionBlock(
+            "main block", title=self.layer.name,
+            **kwargs)
         self.layer.add_main_block(main_block)
 
         return main_block
@@ -468,13 +490,14 @@ class MenuTools(HudTools):
         self.layer.queue_events(show_dialog)
 
     def set_sub_block_for_options(self, block, function):
-        for o in block.member_list:
+        for o in block.option_list:
             if o.child:
                 o.child.handle_event("die")
                 o.remove_event_listener("select")
                 o.remove_event_listener("deselect")
             sb = function(o)
-            self.layer.add_sub_block(block, sb, o)
+            if sb:
+                self.layer.add_sub_block(block, sb, o)
 
     def set_auto_sub_block_trigger(self, trigger, block, function):
         def set_sub_blocks():

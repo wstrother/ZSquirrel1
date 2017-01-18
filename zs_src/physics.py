@@ -60,6 +60,12 @@ class Vector:
 
         return self
 
+    def get_friction_vector(self, cof):
+        friction = self.get_copy(scale=-1 * cof)
+        friction.name = "friction"
+
+        return friction
+
     def scale(self, scalar):
         self.i_hat *= scalar
         self.j_hat *= scalar
@@ -71,6 +77,21 @@ class Vector:
         r = m / self.magnitude
 
         self.scale(r)
+
+    def scale_in_direction(self, angle, scalar):
+        i, j = self.get_basis_vectors(-angle)
+        m1 = Matrix.get_from_vectors(i, j)
+
+        m2 = Matrix([
+            [scalar, 0],
+            [0, 1]
+        ])
+        m = Matrix(m2.multiply_matrix(m1))
+
+        i, j = m.multiply_vector(self)
+        self.i_hat = i
+        self.j_hat = j
+        self.rotate(angle)
 
     def get_angle(self):
         i, j = self.get_value()
@@ -161,12 +182,37 @@ class Vector:
 
         return v
 
-    def get_value_in_direction(self, angle):
+    @staticmethod
+    def get_basis_vectors(angle):
         i = Vector("basis_i", 1, 0).rotate(angle)
         j = Vector("basis_j", 0, 1).rotate(angle)
 
+        return i, j
+
+    def get_value_in_direction(self, angle):
+        i, j = self.get_basis_vectors(angle)
+
         return self.get_transformation_vector(
             i, j).get_value()
+
+    # def scale_in_direction(self, angle, scalar):
+    #     i, j = self.get_basis_vectors(angle)
+    #     a, c = i.get_value()
+    #     b, d = j.get_value()
+    #
+    #     a, c = .25, 25
+    #     b, d = .25, .25
+    #
+    #     self.i_hat = (a * x) + (b * y)
+    #     self.j_hat = (c * x) + (d * y)
+
+    def matrix_multiplication(self, basis_i, basis_j):
+        x, y = self.get_value()
+        a, c = basis_i.get_value()
+        b, d = basis_j.get_value()
+
+        self.i_hat = (a * x) + (b * y)
+        self.j_hat = (c * x) + (d * y)
 
     @staticmethod
     def get_from_complex(c):
@@ -185,7 +231,6 @@ class Vector:
     @staticmethod
     def sum_forces(*vectors):
         acceleration = sum(vector.complex for vector in vectors)
-
         vector = Vector.get_from_complex(acceleration)
 
         return vector
@@ -231,7 +276,6 @@ class Wall(Vector):
 
         self.friction = friction
         self.ground = ground
-        self.sprite_collide_offset = False
 
     def __repr__(self):
         return "Wall with angle {:.3f} at {}".format(
@@ -302,11 +346,8 @@ class Wall(Vector):
             v_bound = point_in_bounds(
                 collision, offset, vector.apply_to_point(offset)
             )
-            # args = [(round(x[0]), round(x[1])) for x in (collision, offset, vector.apply_to_point(offset))]
-            # print(args)
 
             if not w_bound or not v_bound:
-                # print(w_bound, v_bound)
                 return False
 
             else:
@@ -324,14 +365,13 @@ class Wall(Vector):
         return near, far
 
     def sprite_collision(self, sprite):
-        v = sprite.velocity
+        v = sprite.get_friction_velocity()
 
         if not v.check_orientation(
                 self.normal.get_copy(rotate=.5)):
             return False
 
         else:
-            # print("testing " + str(self))
             near, far = self.get_sprite_collision_points(
                 sprite)
             dx = near[0] - far[0]
@@ -344,33 +384,32 @@ class Wall(Vector):
                 far, skeleton)
 
             if near_collision:
-                self.sprite_collide_offset = False
                 return near_collision
 
             else:
-                self.sprite_collide_offset = True
                 return far_collision
 
     @staticmethod
     def handle_collision_smooth(sprite, wall):
-        # print("{} handling collision".format(wall))
+        sprite.velocity.scale_in_direction(
+            wall.normal.get_angle(), 0
+        )
 
+        if wall.ground:
+            sprite.set_on_ground(wall)
+
+    @staticmethod
+    def handle_collision_mirror(sprite, wall):
         near, far = wall.get_sprite_collision_points(sprite)
-        x, y = sprite.velocity.apply_to_point(
+        x, y = sprite.get_projected_position(
             near)
         ix, iy = wall.axis_collision(
             (x, y), wall.normal)
         dx = ix - x
         dy = iy - y
-        adjust = Vector("velocity adjustment", dx, dy)
+        adjust = Vector("velocity adjustment", dx, dy).scale(2)
         sprite.move(adjust.get_value())
-        # print("applying {} to {}".format(adjust, sprite))
 
-        if wall.sprite_collide_offset:
-            dx = near[0] - far[0]
-            dy = near[1] - far[1]
-            adjust.i_hat += dx
-            adjust.j_hat += dy
         sprite.apply_force(adjust)
 
         if wall.ground:
@@ -400,6 +439,56 @@ class Wall(Vector):
             start_n = xn + offset[0], yn + offset[1]
             normal = self.normal.get_copy(scale=self.NORMAL_DRAW_SCALE)
             normal.draw(screen, color, offset=start_n)
+
+
+class Matrix:
+    # [[a, c],
+    #  [b, d]]
+    # i_hat = ax + by       ae + bg     af + bh
+    # j_hat = cx + dy       ce + dg     cf + dh
+    def __init__(self, values):
+        self.values = values
+
+        self.a, self.b = values[0]
+        self.c, self.d = values[1]
+
+    @staticmethod
+    def get_from_vectors(i, j):
+        m = [
+            [i.i_hat, j.i_hat],
+            [i.j_hat, j.j_hat]
+        ]
+        return Matrix(m)
+
+    def get_vectors(self):
+        return (
+            Vector("i_hat", self.a, self.c),
+            Vector("j_hat", self.b, self.d)
+        )
+
+    def multiply_vector(self, vector):
+        x, y = vector.get_value()
+        ax = self.a * x
+        by = self.b * y
+        cx = self.c * x
+        dy = self.d * y
+        i = ax + by
+        j = cx + dy
+
+        return i, j
+
+    def multiply_matrix(self, matrix):
+        i, j = matrix.get_vectors()
+
+        new_i = self.multiply_vector(i)
+        new_j = self.multiply_vector(j)
+
+        values = [
+            [new_i[0], new_j[0]],
+            [new_i[1], new_j[1]]
+        ]
+
+        return values
 
 
 class PhysicsLayer(Layer):
@@ -520,7 +609,8 @@ class PhysicsLayer(Layer):
         for group in self.groups:
             for sprite in group:
                 # if not sprite.is_grounded():
-                gravity = self.gravity.get_copy(scale=sprite.mass)
+                gravity = self.gravity.get_copy(
+                    scale=sprite.mass)
                 sprite.apply_force(gravity)
 
     def apply_velocity(self, dt):
@@ -625,9 +715,9 @@ class DrawWallsLayer(Layer):
 
 class DrawVectorLayer(Layer):
     VELOCITY_COLOR = (0, 255, 0)
-    VELOCITY_SCALE = 6
+    VELOCITY_SCALE = 1
     ACCELERATION_COLOR = (0, 0, 255)
-    ACCELERATION_SCALE = 60
+    ACCELERATION_SCALE = 10
 
     def __init__(self, group, **kwargs):
         super(DrawVectorLayer, self).__init__("draw vector layer", **kwargs)
@@ -636,7 +726,7 @@ class DrawVectorLayer(Layer):
 
     def draw(self, screen, offset=(0, 0)):
         for sprite in self.group:
-            x, y = sprite.collision_point
+            x, y = sprite.collision_lead_point
             x += offset[0]
             y += offset[1]
 
@@ -835,6 +925,17 @@ class PhysicsInterface:
         else:
             return 0
 
+    def get_friction_velocity(self):
+        v = self.velocity.get_copy()
+        friction = v.get_friction_vector(self.friction)
+        v.add(friction)
+
+        return v
+
+    def get_projected_position(self, point):
+        return self.get_friction_velocity().apply_to_point(
+            point)
+
     def apply_force(self, vector):
         # print(vector)
         # print(self.collision_point)
@@ -853,8 +954,7 @@ class PhysicsInterface:
         self.move(movement.get_value())
 
     def apply_friction(self, cof):
-        friction = self.velocity.get_copy(scale=-1 * cof)
-        friction.name = "friction"
+        friction = self.velocity.get_friction_vector(cof)
         self.apply_force(friction)
         self.friction = cof
 

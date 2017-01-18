@@ -72,7 +72,7 @@ class ZsStateMachine(ZsEventInterface):
 
 class AnimationMachine(ZsStateMachine):
     def __init__(self, file_name, sprite):
-        super(AnimationMachine, self).__init__("animation machine")
+        super(AnimationMachine, self).__init__(sprite.name + " machine")
 
         self.sprite = sprite
         self.buffer_state = None

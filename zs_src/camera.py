@@ -46,18 +46,11 @@ class Camera:
             self.y_offset.value += dy
 
     def __init__(self, size):
-        self.position = 0, 0
+        self.position = -300, 0
         self.size = size
         self.scale = 1
         self.window = Camera.Window(size, (260, 400), (300, 100), offset=(0, 50))
         self.visible = False
-
-        def toggle_visible():
-            self.visible = not self.visible
-
-        self.interface = {
-            "Toggle window visibility": toggle_visible,
-        }
 
     @property
     def focus_point(self):
@@ -164,6 +157,13 @@ class CameraLayer(Layer):
         self.bg_layers = []
 
         self.set_value("tracking_point", None)
+
+        def toggle_visible():
+            self.camera.visible = not self.camera.visible
+
+        self.interface = {
+            "Toggle window visibility": toggle_visible,
+        }
 
     def track_sprite_to_window(self, sprite, window, rate):
         self.model.link_object(sprite, "tracking_point",

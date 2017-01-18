@@ -47,7 +47,7 @@ class GuiSprite(StyleInterface, ZsSprite):
         sound = gs(key)
 
         sound.stop()
-        sound.set_volume(.3)
+        sound.set_volume(.1)
         sound.play()
 
     def change_color(self, key, value):
@@ -66,17 +66,31 @@ class GuiSprite(StyleInterface, ZsSprite):
 class TextSprite(GuiSprite):
     def __init__(self, text, name=None, position=(0, 0),
                  style_dict=None, cutoff=None, nl=True,
-                 **kwargs):
+                 font=None, **kwargs):
         if not name:
             name = text
+        if font:
+            self.font_name = font
+        else:
+            self.font_name = "main"
         super(TextSprite, self).__init__(name, position=position, style_dict=style_dict, **kwargs)
 
         self.text = text
         self.cutoff = cutoff
         self.nl = nl
+        if text is None:
+            print("")
         self.graphics = TextGraphics(self)
 
         self.add_event_methods("change_text")
+
+    @property
+    def size(self):
+        return self.image.get_size()
+
+    @size.setter
+    def size(self, value):
+        pass
 
     def change_text(self, text):
         if self.text != text:
@@ -94,16 +108,20 @@ class TextSprite(GuiSprite):
 class ContainerSprite(GuiSprite):
     EVENT_NAMES = ("change_member_size",)
 
-    def __init__(self, name, members=None, **kwargs):
+    def __init__(self, name, members=None, title=None, **kwargs):
         super(ContainerSprite, self).__init__(name, **kwargs)
         self.initial_size = kwargs.get("size", (1, 1))
         self.add_event_methods(*ContainerSprite.EVENT_NAMES)
 
+        self.title = title
+        if title:
+            self.title = TextSprite(title, font="title")
         self.table_style = kwargs.get("table_style", None)
         self.member_table = None
         self.set_table(members)
-        self.graphics = ContainerGraphics(self)
+
         self.bg_color = self.style.colors["bg"]
+        self.graphics = ContainerGraphics(self)
 
     def add_to_container(self, *sprites):
         for sprite in sprites:
@@ -120,6 +138,10 @@ class ContainerSprite(GuiSprite):
     def set_table(self, members=None):
         self.member_table = self.get_table(members)
         self.add_to_container(*self.member_list)
+
+        if self.title:
+            self.member_table.members = [[self.title]] + self.members
+            self.add_to_container(self.title)
 
     def get_table(self, members):
         table_style = self.table_style
@@ -181,7 +203,12 @@ class ContainerSprite(GuiSprite):
 
     def adjust_style(self, value):
         super(ContainerSprite, self).adjust_style(value)
-        self.set_member_positions()
+        for item in self.member_list:
+            item.adjust_style(value)
+
+        self.handle_event("change_member_size")
+        # self.set_member_positions()
+        # self.set_size_to_table()
 
     def adjust_size(self, value):
         self.rect.size = value
@@ -236,16 +263,20 @@ class ContainerSprite(GuiSprite):
     def on_dying(self):
         ratio = 1 - self.event.timer.get_ratio()
 
-        bg_color = self.bg_color
-        new_color = tuple([value * ratio for value in bg_color])
-        self.change_color("bg", new_color)
+        bg_color = self.style.colors["bg"]
+        if bg_color:
+            new_color = tuple([value * ratio for value in bg_color])
+            self.bg_color = new_color
+            self.reset_image()
 
     def on_spawning(self):
         ratio = self.event.timer.get_ratio()
 
-        bg_color = self.bg_color
-        new_color = tuple([round(value * ratio) for value in bg_color])
-        self.change_color("bg", new_color)
+        bg_color = self.style.colors["bg"]
+        if bg_color:
+            new_color = tuple([round(value * ratio) for value in bg_color])
+            self.bg_color = new_color
+            self.reset_image()
 
 # GUI Member Table classes
 

@@ -30,14 +30,24 @@ class SelectableInterface:
         return self.active
 
     def on_select(self):
-        if not self.event.get("no_sound", False):
+        if not self.event.get("no_sound"):
             self.play_sound("select")
 
     def on_deselect(self):
         pass
 
     def on_activate(self):
-        if not self.event.get("no_sound", False):
+        altered = False
+        if "activate" in [l.trigger for l in self.event_handler.listeners]:
+            altered = True
+
+        if self.__class__.on_activate is not SelectableInterface.on_activate:
+            altered = True
+
+        if self.event_handler.event_methods["activate"] != self.on_activate:
+            altered = True
+
+        if altered:
             self.play_sound("activate")
 
     def on_return(self):
@@ -122,6 +132,8 @@ class SwitchOption(TextOption):
         self.add_event_methods("change_switch")
 
     def on_activate(self):
+        super(SwitchOption, self).on_activate()
+
         if self.toggle_active():
             self.turn_on_cycling()
 
@@ -266,7 +278,7 @@ class TextField(TextOption):
                                 last_word = self.text.split()[-1]
                                 self.text = self.text.rpartition(last_word)[0]
                             else:
-                                self.text = self.text[:-1]
+                                self.change_text(self.text[:-1])
                             self.reset_image()
 
                     elif key <= keyboard_cutoff and length < self.input_length:
@@ -498,7 +510,21 @@ class OptionBlock(MenuBlock):
 
     @property
     def options(self):
-        return self.members
+        m = self.members
+
+        options = []
+        for row in m:
+            option_row = [x for x in row if x.selectable]
+            if option_row:
+                options.append(option_row)
+
+        return options
+
+    @property
+    def option_list(self):
+        ml = self.member_list
+
+        return [x for x in ml if x.selectable]
 
     @property
     def active_option(self):
@@ -652,6 +678,10 @@ class DialogBlock(OptionBlock):
             self.return_command_names = ADVANCE + BACK
 
         self.style = {"align_h": "c"}
+
+    def on_return(self):
+        if self.options != [[]]:
+            self.event.set("do_response", True)
 
     @property
     def options(self):

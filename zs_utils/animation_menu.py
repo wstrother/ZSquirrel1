@@ -3,7 +3,7 @@ from os import listdir
 from zs_constants.paths import ANIMATION_STREAMS
 from zs_src.animations import StreamManager
 from zs_src.menus import Menu
-from zs_utils.debug_menu import DictEditor
+from zs_utils.debug_utils import DictEditor
 
 
 class AnimationMenu(Menu):

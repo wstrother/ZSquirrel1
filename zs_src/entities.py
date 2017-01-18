@@ -18,11 +18,11 @@ class Model(ZsEventInterface):
 
         if v_dict:
             self.set_values(v_dict)
+        self.set_value("_value_names", [])
         self.link_object(
             self, "_value_names",
             lambda model: model.value_names
         )
-        self.set_value("_value_names", [])
 
         self.add_event_methods("change_value",
                                "toggle_value",
@@ -61,6 +61,7 @@ class Model(ZsEventInterface):
     def link_object(self, obj, value_name, function):
         l = (obj, value_name, function)
         self.object_listeners.append(l)
+        self.check_object_listeners()
 
     def handle_change(self, value_name):
 
@@ -164,6 +165,8 @@ class ZsEntity(ZsEventInterface):
         self._graphics = None
         self.parent = None
         self.child = None
+
+        self.active = True
         self.visible = True
 
         self.spawn_time = TRANSITION_TIME
@@ -262,6 +265,12 @@ class ZsEntity(ZsEventInterface):
             change_state = "{} state={}".format(name, state)
             self.handle_event(change_state)
 
+    def set_active(self, value):
+        self.active = value
+
+    def set_visible(self, value):
+        self.visible = value
+
     def update(self, dt):
         if self.graphics:
             self.graphics.update()
@@ -349,10 +358,11 @@ class Layer(ZsEntity):
     def __init__(self, name, size=SCREEN_SIZE, position=(0, 0), model=None, controllers=None):
         super(Layer, self).__init__(name, size, position)
 
-        self.game_environment = False
         self.transition_to = None
         self.return_to = None
+        self.pause_layer = None
 
+        self.game_environment = False
         self.active = True
 
         if controllers:
@@ -363,7 +373,6 @@ class Layer(ZsEntity):
         self.sub_layers = []
 
         self.model = Model(self.name + " model", model)
-
         self.add_event_methods("change_environment", "pause", "unpause")
 
     def adjust_size(self, value):
@@ -384,15 +393,23 @@ class Layer(ZsEntity):
             layer.handle_event("spawn")
 
     @property
+    def paused(self):
+        return bool(self.pause_layer)
+
+    @property
     def controller(self):
         try:
             return self.controllers[0]
         except IndexError:
             return None
 
-    def add_controllers(self, *controllers):
-        for controller in controllers:
-            self.controllers.append(controller)
+    def copy_controllers(self, controllers):
+        new_controllers = []
+        for c in controllers:
+            new_controllers.append(
+                c.get_copy())
+
+        self.controllers = new_controllers
 
     @staticmethod
     def make_group():
@@ -418,6 +435,9 @@ class Layer(ZsEntity):
         self.sub_layers.append(layer)
 
     def handle_controller(self):
+        for c in self.controllers:
+            c.update()
+
         for layer in self.sub_layers:
             if layer.active:
                 layer.handle_controller()
@@ -479,9 +499,6 @@ class Layer(ZsEntity):
     # each iteration of the loop (i.e. once per frame) if it is assigned
     # to the game's "environment" attribute.
     def main(self, dt, screen):
-        for c in self.controllers:
-            c.update()
-
         self.handle_controller()
         self.update(dt)
         self.draw(screen)
@@ -498,21 +515,22 @@ class Layer(ZsEntity):
         layer = self.event.layer
         layer.handle_event("spawn")
 
-        unpause = ("unpause",
-                   ("layer", layer))
         layer.set_event_listener(
-            "death", unpause, self
+            "death", "unpause", self,
+            temp=True
         )
 
         layer.active = True
         layer.visible = True
-        if layer not in self.sub_layers:
-            self.add_sub_layer(layer)
+        self.add_sub_layer(layer)
+        self.pause_layer = layer
 
     def on_unpause(self):
-        layer = self.event.layer
+        layer = self.pause_layer
+
         sub_layers = [l for l in self.sub_layers if l is not layer]
         self.sub_layers = sub_layers
+        self.pause_layer = None
 
         r = layer.get_value("_return")
         print("returning {}".format(r))

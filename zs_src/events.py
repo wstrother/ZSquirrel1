@@ -420,6 +420,16 @@ class EventHandler:
             if h and l.temp:        # after the event_method is called
                 self.remove_listener(name, l.response_name)
 
+    def check_activity(self, name):
+        found = False
+        if name in self.event_methods:
+            found = True
+
+        if name in [l.name for l in self.listeners]:
+            found = True
+
+        return found
+
     def handle_action(self, action):
         self.clock.add_timers(action)
 
@@ -460,6 +470,16 @@ class ZsEventInterface:
     def remove_event_methods(self, *event_names):
         self.event_handler.remove_event_methods(*event_names)
 
+    def add_timer(self, name, duration, temp=True,
+                  on_tick=None, on_switch_off=None):
+        timer = Timer(name, duration, temp=temp)
+        if on_tick:
+            timer.on_tick = on_tick
+        if on_switch_off:
+            timer.on_switch_off = on_switch_off
+
+        self.event_handler.clock.add_timers(timer)
+
     # NOTE: calling the 'handle_event' method is exactly the same as calling
     # the bound event_method directly, after creating an event object and
     # assigning it to the object's 'event' attribute. I DO NOT RECOMMEND
@@ -494,7 +514,8 @@ class ZsEventInterface:
 
     # NOTE: if no 'target' argument is passed to this method, the default
     # target will become the entity object itself.
-    def set_event_listener(self, trigger_name, response, target=None, temp=False):
+    def set_event_listener(self, trigger_name, response,
+                           target=None, temp=False):
         if not target:
             response = Event.interpret(response)
             target = response.get("target", self)

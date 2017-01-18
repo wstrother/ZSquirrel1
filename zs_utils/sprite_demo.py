@@ -1,61 +1,78 @@
 from types import FunctionType, MethodType
 
 from zs_constants.sprite_demo import GRAVITY, COF
-from zs_constants.zs import SCREEN_SIZE
 from zs_src.camera import CameraLayer
 from zs_src.camera import ParallaxBgLayer
-from zs_src.classes import CacheList
 from zs_src.controller import Command, Step
 from zs_src.entities import Layer
-from zs_src.menus import HeadsUpDisplay, Menu
 from zs_src.physics import PhysicsLayer, Wall
 from zs_src.resource_library import get_resources
 from zs_src.sprites import CharacterSprite
 from zs_src.state_machines import AnimationMachine
-from zs_utils.debug_menu import DictEditor
+from zs_utils.debug_utils import PauseMenu, DebugLayer
 
 
 class SpriteDemo(Layer):
     def __init__(self, **kwargs):
-        super(SpriteDemo, self).__init__("sprite demo", **kwargs)
+        super(SpriteDemo, self).__init__("Sprite Demo", **kwargs)
         self.main_group = self.make_group()
-        self.context = ContextManager(self)
 
-        self.camera_layer = CameraLayer("camera layer")
-        self.add_sub_layer(self.camera_layer)
+        context = ContextManager(self)
+        self.context = context
 
-        self.sprite_layer = PhysicsLayer(
-            GRAVITY, COF, "sprite demo physics layer")
-        self.camera_layer.add_sub_layer(
-            self.sprite_layer)
+        camera_layer = CameraLayer("Camera Layer")
+        self.camera_layer = camera_layer
+        self.add_sub_layer(camera_layer)
 
-        self.debug_layer = DebugLayer(self)
-        self.debug_layer.model = self.model
-        self.add_sub_layer(self.debug_layer)
-        # self.camera_layer.add_sub_layer(
-        #     self.debug_layer)
+        sprite_layer = PhysicsLayer(
+            GRAVITY, COF, "Physics Layer")
+        self.sprite_layer = sprite_layer
 
-        self.pause_menu = PauseMenu(self)
-        self.frame_advance = False
-        self.paused = False
+        self.model.link_object(
+            self, "game_paused", lambda env: env.paused)
+        self.model.link_value(
+            "game_paused", lambda b: camera_layer.set_active(not b)
+        )
+        camera_layer.add_sub_layer(
+            sprite_layer)
+
+        debug_layer = DebugLayer(self)
+        self.add_sub_layer(debug_layer)
+
+        context.set_up_bg_layers(camera_layer)
+        context.set_up_collisions(sprite_layer)
+        context.link_interface(
+            sprite_layer, debug_layer, camera_layer)
+
+        self.pause_menu = PauseMenu(
+            self, sprite_layer, debug_layer, camera_layer)
+
+        self.set_value(
+            "frame_advance", True)
+        self.set_value(
+            "spawn", context.spawn_sprite)
+        self.set_value(
+            "sprite_dict", context.set_up_sprite_dict())
+        self.set_value("dt", 0)
 
     def handle_controller(self):
         super(SpriteDemo, self).handle_controller()
 
         if self.controller.check_command("double tap up"):
-            if not self.pause_menu.active:
-                self.frame_advance = not self.frame_advance
+            if not self.paused:
+                self.set_value("frame_advance", False)
 
         devices = self.controller.devices
         start = devices["start"]
-        pause_ok = not self.pause_menu.active
+        frame_advance = self.get_value("frame_advance")
+        pause_ok = not self.paused and not frame_advance
 
-        if not self.frame_advance:
-            if start.check() and pause_ok:
-                self.queue_events(("pause",
-                                   ("layer",
-                                    self.pause_menu)))
-        else:
+        if start.check() and pause_ok:
+            self.queue_events(("pause",
+                               ("layer",
+                                self.pause_menu)))
+
+        if frame_advance:
             if start.held:
                 if devices["a"].check():
                     self.camera_layer.active = True
@@ -63,11 +80,6 @@ class SpriteDemo(Layer):
                     self.camera_layer.active = False
             else:
                 self.camera_layer.active = True
-
-        if not self.paused:
-            for c in self.sprite_layer.controllers:
-                if c:
-                    c.update()
 
     def populate(self):
         # # REPLACE WITH DATA FROM CONFIG VALUE FILE LOOKUP
@@ -78,6 +90,8 @@ class SpriteDemo(Layer):
 
         player = spawn("player", position=(450, 100))
         self.set_value("player", player)
+        self.sprite_layer.toggle_hitbox_layer()
+        self.sprite_layer.toggle_vector_layer()
 
     def reset_controllers(self):
         for sprite in self.main_group:
@@ -87,21 +101,7 @@ class SpriteDemo(Layer):
         context = self.context
         context.set_up_controllers()
 
-        self.set_value(
-            "_spawn", context.spawn_sprite)
-        self.set_value(
-            "_sprite_dict", context.set_up_sprite_dict())
-
         super(SpriteDemo, self).on_spawn()
-
-        camera_layer = self.camera_layer
-        sprite_layer = self.sprite_layer
-        debug_layer = self.debug_layer
-
-        context.set_up_bg_layers(camera_layer)
-        context.set_up_collisions(sprite_layer)
-        context.set_up_layers(
-            sprite_layer, debug_layer, camera_layer)
 
         player = self.get_value("player")
         window = self.camera_layer.camera.window
@@ -109,16 +109,6 @@ class SpriteDemo(Layer):
             player, window, 1 / 8)
         self.camera_layer.track_sprite_heading_to_window(
             player, window, 4 / 3)
-
-    def on_pause(self):
-        self.paused = True
-        super(SpriteDemo, self).on_pause()
-        self.camera_layer.active = False
-
-    def on_unpause(self):
-        self.paused = False
-        super(SpriteDemo, self).on_unpause()
-        self.camera_layer.active = True
 
 
 class ContextManager:
@@ -128,26 +118,22 @@ class ContextManager:
         self.set_value = environment.set_value
         self.get_value = environment.get_value
 
-    def set_up_layers(self, *layers):
-        for layer in layers:
-            if hasattr(layer, "interface"):
-                self.link_interface(layer)
-
+    def link_interface(self, *items):
+        for item in items:
+            model = self.environment.model
+            if "_" + item.name not in model.values:
                 self.environment.set_value(
-                    "_" + layer.name, layer.interface
+                    "_" + item.name, item.interface
                 )
 
-    def link_interface(self, obj):
-        model = self.environment.model
+            for value_name in item.interface:
+                value = item.interface[value_name]
 
-        for value_name in obj.interface:
-            value = obj.interface[value_name]
+                if type(value) not in (FunctionType, MethodType):
+                    set_method = getattr(item, "set_" + value_name)
 
-            if type(value) not in (FunctionType, MethodType):
-                set_method = getattr(obj, "set_" + value_name)
-
-                model.link_sub_value("_" + obj.name, value_name,
-                                     set_method)
+                    model.link_sub_value("_" + item.name, value_name,
+                                         set_method)
 
     @staticmethod
     def set_up_bg_layers(layer):
@@ -175,7 +161,7 @@ class ContextManager:
         a = 300, 300
         b = 750, 450
         walls = [Wall(a, b, ground=True),
-                 Wall((160, 390), (160, 750)),
+                 Wall((160, 390), (160, 670)),
                  Wall((800, 550), (1050, 360), True),
                  Wall((1050, 360), (800, 550)),
                  Wall((1200, 470), (1430, 280), True),
@@ -184,6 +170,7 @@ class ContextManager:
                  Wall((2200, -120), (2500, -220), True),
                  Wall((2500, -220), (2200, -120)),
                  Wall((0, 720), (1999, 720), True)]
+        # walls = [Wall((0, 550), (1999, 550), True)]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
         layer.add_hitbox_layer(group)
@@ -230,10 +217,16 @@ class ContextManager:
                 command)
 
     def set_up_controllers(self):
-        for controller in self.environment.controllers:
+        controllers = self.environment.controllers
+        layers = (self.environment.sprite_layer,
+                  self.environment.pause_menu)
+
+        for controller in controllers:
             self.set_up_commands(controller)
-            self.environment.sprite_layer.controllers.append(
-                controller.get_copy())
+
+            for layer in layers:
+                layer.copy_controllers(
+                    controllers)
 
     def set_up_sprite_dict(self):
         group = self.environment.main_group
@@ -253,7 +246,7 @@ class ContextManager:
                 "group": group},
             "squirrel2": {
                 "load": lambda **kwargs: DemoSprite("squirrel2", **kwargs),
-                "controller": 1,
+                "controller": 2,
                 "graphics": "squirrel2",
                 "animation_machine": SpriteDemoMachine,
                 "group": group}
@@ -262,7 +255,7 @@ class ContextManager:
         return d
 
     def set_graphics(self, sprite):
-        sprite_dict = self.environment.get_value("_sprite_dict")
+        sprite_dict = self.environment.get_value("sprite_dict")
         name = sprite.name
         d = sprite_dict[name]
         stream_file = d["graphics"]
@@ -274,7 +267,7 @@ class ContextManager:
             animation_machine)
 
     def set_sprite_controller(self, sprite):
-        sprite_dict = self.environment.get_value("_sprite_dict")
+        sprite_dict = self.environment.get_value("sprite_dict")
         name = sprite.name
         n = sprite_dict[name]["controller"]
 
@@ -287,16 +280,12 @@ class ContextManager:
 
     def spawn_sprite(self, key, **kwargs):
         model = self.environment.model
-        sprite_dict = model.values["_sprite_dict"][key]
+        sprite_dict = model.values["sprite_dict"][key]
         load = sprite_dict["load"]
         group = sprite_dict["group"]
 
         sprite = load(**kwargs)
         sprite.add(group)
-
-        if "_" + sprite.name not in model.values:
-            self.environment.set_value(
-                "_" + sprite.name, sprite.interface)
 
         self.link_interface(sprite)
         self.set_graphics(sprite)
@@ -495,7 +484,7 @@ class DemoSprite(CharacterSprite):
                 "run": 2,
                 "run_slow": 2.5,
                 "run_stop": .5,
-                "pivot": .5
+                "pivot": -.1
             }
 
             if state in ("jump_up", "jump_apex", "jump_fall"):
@@ -512,324 +501,14 @@ class DemoSprite(CharacterSprite):
                     dx = self.get_slide_force() * (-1)
                     dx -= (dx * (1 - r)) / (base_speed ** 2)
             else:
-                if state == "dash" and frame_number == 0:
-                    self.velocity.i_hat = 0
-                    self.velocity.j_hat = 0
                 dx = movement[state] * self.direction[0] * self.friction * base_speed
+                if state == "dash" and frame_number == 0:
+                    self.velocity.scale_in_direction(
+                        self.ground.get_angle(), 0
+                    )
+                    dx *= 5
 
             move = self.get_ground_vector(dx)
             self.apply_force(move)
 
-
-class DebugLayer(HeadsUpDisplay):
-    def __init__(self, environment, **kwargs):
-        super(DebugLayer, self).__init__(environment.name + " debug layer", **kwargs)
-        self.environment = environment
-
-        def toggle_visible():
-            self.visible = not self.visible
-
-        self.interface = {
-            "Toggle debug layer": toggle_visible,
-        }
-
-    def set_hi(self, value):
-        print(value)
-
-    @staticmethod
-    def animation_machine_reporter():
-        states = CacheList(4)
-
-        def report_animation(p):
-            if p.animation_machine:
-                state = p.animation_machine.get_state()
-                if not states or states[-1] is not state:
-                    states.append(state)
-
-                return [s.name for s in states]
-            else:
-                return "Not set up"
-
-        return report_animation
-
-    @staticmethod
-    def physics_reporter():
-        velocities = CacheList(5)
-        accelerations = CacheList(5)
-
-        def report_physics(p):
-            velocities.append(
-                p.velocity.get_value())
-            accelerations.append(
-                p.acceleration.get_value())
-
-            vx = [v[0] for v in velocities]
-            vy = [v[1] for v in velocities]
-            vx = sum(vx) / len(vx)
-            vy = sum(vy) / len(vy)
-
-            ax = [a[0] for a in accelerations]
-            ay = [a[1] for a in accelerations]
-            ax = sum(ax) / len(ax)
-            ay = sum(ay) / len(ay)
-
-            x, y = p.collision_point
-
-            f_string = "{:>15}: {:> 04.3f}, {:> 04.3f}"
-            text = [
-                f_string.format("ACCELERATION", ax, ay),
-                f_string.format("VELOCITY", vx, vy),
-                f_string.format("POSITION", x, y),
-                "GROUNDED: " + str(p.is_grounded())
-            ]
-
-            return text
-
-        return report_physics
-
-    def populate(self):
-        tools = self.tools
-        w, h = SCREEN_SIZE
-        w -= 50
-        print(w)
-        if w > 750:
-            cutoff = 4
-        else:
-            cutoff = 3
-
-        player = self.get_value("player")
-        reporters = [
-            tools.make_reporter_sprite(
-                player, self.animation_machine_reporter()),
-            tools.make_reporter_sprite(
-                player, self.physics_reporter()
-            ),
-            tools.make_reporter_sprite(
-                self.environment,
-                lambda e: "FRAME_ADVANCE: {}".format(e.frame_advance)),
-            tools.make_reporter_sprite(
-                self.environment.camera_layer,
-                lambda l: "CAMERA_FOCUS: {}".format(l.camera.focus_point)
-            )
-        ]
-        block = tools.ContainerSprite(
-            "physics reporter box", reporters,
-            size=(w, 0), table_style="cutoff {}".format(cutoff),
-            position=(25, 0)
-        )
-        block.style = {"align_h": "c"}
-        block.add(self.hud_group)
-
-
-class PauseMenu(Menu):
-    def __init__(self, environment, **kwargs):
-        super(PauseMenu, self).__init__("pause menu", **kwargs)
-        self.add_event_methods(
-            "load_sprite_editor", "load_physics_editor",
-            "update_sprite_dict", "update_physics",
-            "load_debug_editor", "update_debug")
-
-        self.active = False
-        self.environment = environment
-
-        # EDIT MODEL VALUES
-        # EDIT SPRITE DICT
-        #    SPRITE VALUES
-        #    MAKE SPRITE
-        # TOGGLE DEBUG LAYERS
-        #    HITBOXES
-        #    VECTORS
-        # CHOOSE CONTROLLER
-        # CHOOSE REPORTERS
-
-    def handle_controller(self):
-        super(PauseMenu, self).handle_controller()
-
-        if self.get_state() == "alive":
-            if self.controller.devices["start"].held == 1:
-                self.handle_event("die")
-
-    def populate(self):
-        self.model = self.environment.model
-        self.controllers = self.environment.controllers
-
-        tools = self.tools
-        mb = tools.make_main_block(position=(200, 200),
-                                   size=(300, 0))
-
-        spawn_option = tools.TextOption(
-            "Spawn Sprite"
-        )
-        mb.add_member_sprite(spawn_option)
-        self.add_sub_block(
-            mb, self.get_spawn_sub_block(),
-            spawn_option)
-
-        sprite_option = tools.TextOption(
-            "Sprite Options")
-        mb.add_member_sprite(sprite_option)
-        self.add_sub_block(
-            mb, self.get_sprite_dict_block(),
-            sprite_option)
-
-        physics_option = tools.make_text_option(
-            "Physics Layer Options", "load_physics_editor",
-            self)
-        mb.add_member_sprite(physics_option)
-
-        debug_option = tools.make_text_option(
-            "Debug Layer Options", "load_debug_editor",
-            self
-        )
-        mb.add_member_sprite(debug_option)
-
-        controller_option = tools.TextOption(
-            "Change Controller")
-        mb.add_member_sprite(controller_option)
-        self.add_sub_block(
-            mb, self.get_controller_sub_block(),
-            controller_option)
-
-        leave = tools.make_text_option(
-            "Leave demo", "die", self.environment)
-        mb.add_member_sprite(leave)
-
-    def get_controller_sub_block(self):
-        tools = self.tools
-        x, y = self.main_block.position
-        x += self.main_block.size[0]
-
-        block = tools.OptionBlock(
-            "controller sub block",
-            position=(x, y))
-
-        controller_option = tools.SwitchOption(
-            [c.name for c in self.controllers]
-        )
-        block.add_member_sprite(controller_option)
-
-        def change_function():
-            sets = (self.environment.controllers,
-                    self.environment.sprite_layer.controllers)
-            for controllers in sets:
-                name = controller_option.text
-                i = [c.name for c in controllers].index
-                s = i(name)
-
-                a, b = controllers[0], controllers[s]
-                controllers[0] = b
-                controllers[s] = a
-            self.environment.reset_controllers()
-
-        change_option = tools.TextOption("select")
-        tools.set_function_call_on_activation(
-            change_option, change_function
-        )
-        block.add_member_sprite(change_option)
-
-        return block
-
-    def get_spawn_sub_block(self):
-        sprite_dict = self.get_value("_sprite_dict")
-        tools = self.tools
-        x, y = self.main_block.position
-        x += self.main_block.size[0]
-        to, fo = tools.TextOption, tools.TextFieldOption
-
-        sprite_option = tools.SwitchOption(
-            list(sprite_dict.keys()))
-
-        x_option = fo("0", 3)
-        y_option = fo("0", 3)
-
-        def spawn():
-            name = sprite_option.text
-            load = self.get_value("_spawn")
-            sx, sy = int(x_option.text), int(y_option.text)
-
-            load(name, position=(sx, sy))
-
-        spawn_option = to(
-            "Spawn Sprite")
-        tools.set_function_call_on_activation(
-            spawn_option, spawn)
-
-        members = [
-            [sprite_option],
-            [x_option],
-            [y_option],
-            [spawn_option]
-        ]
-        block = tools.OptionBlock(
-            "spawn sprite block", members,
-            position=(x, y), table_style="grid")
-
-        return block
-
-    def get_sprite_dict_block(self):
-        sprite_dict = self.get_value("_sprite_dict")
-        tools = self.tools
-        x, y = self.main_block.position
-        x += self.main_block.size[0]
-
-        block = tools.OptionBlock(
-            "sprite dict block", position=(x, y))
-        for name in sprite_dict:
-            d = self.get_value("_" + name)
-            o = tools.make_text_option(
-                name, ("load_sprite_editor",
-                       ("sprite_name", name),
-                       ("dict", d)),
-                self)
-            block.add_member_sprite(o)
-
-        return block
-
-    def on_load_sprite_editor(self):
-        name = self.event.get("sprite_name")
-        d = self.get_value("_" + name)
-        layer = DictEditor(
-            name + " editor", model=d)
-        load = ("pause",
-                ("layer", layer))
-        self.queue_events(load)
-        self.set_event_listener(
-            "unpause", ("update_sprite_dict",
-                        ("sprite_name", name)),
-            self, temp=True)
-
-    def on_load_physics_editor(self):
-        d = self.get_value("_sprite demo physics layer")
-        layer = DictEditor(
-            "physics editor", model=d)
-        load = ("pause",
-                ("layer", layer))
-        self.queue_events(load)
-        self.set_event_listener(
-            "unpause", "update_physics",
-            self, temp=True)
-
-    def on_load_debug_editor(self):
-        d = self.get_value("_sprite demo debug layer")
-        layer = DictEditor(
-            "debug editor", model=d)
-        load = ("pause",
-                ("layer", layer))
-        self.queue_events(load)
-        self.set_event_listener(
-            "unpause", "update_debug",
-            self, temp=True)
-
-    def on_update_physics(self):
-        d = self.get_return_value()
-        self.set_value("_sprite demo physics layer", d)
-
-    def on_update_debug(self):
-        d = self.get_return_value()
-        self.set_value("_sprite demo debug layer", d)
-
-    def on_update_sprite_dict(self):
-        d = self.get_return_value()
-        name = self.event.get("sprite_name")
-        self.set_value("_" + name, d)
 
