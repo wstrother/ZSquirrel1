@@ -49,6 +49,9 @@ class Model(ZsEventInterface):
         functions.append(function)
         self.change_functions[value_name] = functions
 
+    def clear_value_link(self, value_name):
+        self.change_functions[value_name] = []
+
     def link_sub_value(self, value_name, key, function):
         functions = self.change_functions.get(value_name, [])
 
@@ -126,6 +129,18 @@ class Model(ZsEventInterface):
         self.event_handler.update(dt)
 
         self.check_object_listeners()
+
+    def clear_object_link(self, obj):
+        remove = []
+
+        for l in self.object_listeners:
+            o, value_name, func = l
+            if o is obj:
+                remove.append(l)
+
+        self.object_listeners = [
+            l for l in self.object_listeners if l not in remove
+        ]
 
     def check_object_listeners(self):
         for l in self.object_listeners:

@@ -702,7 +702,7 @@ class DebugLayer(HeadsUpDisplay):
         super(DebugLayer, self).__init__("Debug Layer", **kwargs)
         self.environment = environment
         self.model = environment.model
-        self.visible = True
+        self.visible = False
 
         def toggle_visible():
             self.visible = not self.visible
@@ -767,6 +767,23 @@ class DebugLayer(HeadsUpDisplay):
 
         return get_text
 
+    @staticmethod
+    def get_camera_hud():
+        def get_text(cl):
+            c = cl.camera
+
+            l_str = "{:>13}: {:^17}"
+            f_str = "({:3.1f}, {:3.1f})"
+
+            text = [
+                l_str.format("Focus point", f_str.format(*c.focus_point)),
+                l_str.format("Anchor values", f_str.format(*c.anchor))
+            ]
+
+            return text
+
+        return get_text
+
     def populate(self):
         tools = self.tools
         w, h = SCREEN_SIZE
@@ -778,12 +795,14 @@ class DebugLayer(HeadsUpDisplay):
             cutoff = 3
 
         player = self.get_value("player")
+        camera = self.get_value("camera")
         reporters = [
             HudBox(player, "Player", self.get_physics_interface_hud()),
-            HudBox(player.animation_machine, "Animation State",
-                   self.get_animation_machine_hud(.5)),
-            HudBox(self.model.values, "Frame Rate",
-                   self.get_frame_rate_hud(1))
+            # HudBox(player.animation_machine, "Animation State",
+            #        self.get_animation_machine_hud(.5)),
+            # HudBox(self.model.values, "Frame Rate",
+            #        self.get_frame_rate_hud(1)),
+            HudBox(self.environment.camera_layer, "Camera", self.get_camera_hud())
         ]
 
         block = tools.ContainerSprite(
@@ -817,7 +836,7 @@ class HudBox(ContainerSprite):
             "HUD update frequency", frequency,
             temp=False, on_switch_off=self.set_text)
         self.style = {"align_h": "c"}
-        self.visible = False
+        # self.visible = False
 
     def set_text(self):
         self.body.change_text(self.value)

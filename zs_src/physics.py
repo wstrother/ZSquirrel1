@@ -2,7 +2,8 @@ from math import pi, cos, sin, atan2
 
 from pygame import draw
 
-from zs_constants.zs import FRAME_RATE
+from zs_constants.zs import FRAME_RATE, SCREEN_SIZE
+from zs_src.classes import CacheList
 from zs_src.entities import Layer
 
 
@@ -276,6 +277,7 @@ class Wall(Vector):
 
         self.friction = friction
         self.ground = ground
+        self.sprite_collide_skeleton = False
 
     def __repr__(self):
         return "Wall with angle {:.3f} at {}".format(
@@ -353,44 +355,68 @@ class Wall(Vector):
             else:
                 return collision
 
-    def get_sprite_collision_points(self, sprite):
+    def get_sprite_collision_points(self, sprite, offset=(0, 0)):
         angle = self.normal.get_copy(
             rotate=.5).get_angle()
 
-        near = sprite.get_collision_edge_point(
+        nx, ny = sprite.get_collision_edge_point(
             angle)
+        nx += offset[0]
+        ny += offset[1]
 
-        far = sprite.collision_point
+        fx, fy = sprite.collision_point
+        fx += offset[0]
+        fy += offset[1]
 
-        return near, far
+        return (nx, ny), (fx, fy)
 
-    def sprite_collision(self, sprite):
-        v = sprite.get_friction_velocity()
+    @staticmethod
+    def sprite_collision(sprite, wall, offset=(0, 0)):
+        v_post = sprite.get_last_velocity()
+        v_t = sprite.velocity
 
-        if not v.check_orientation(
-                self.normal.get_copy(rotate=.5)):
+        if not v_t.check_orientation(
+                wall.normal.get_copy(rotate=.5)):
             return False
 
         else:
-            near, far = self.get_sprite_collision_points(
-                sprite)
+            near, far = wall.get_sprite_collision_points(
+                sprite, offset)
             dx = near[0] - far[0]
             dy = near[1] - far[1]
             skeleton = Vector("skeleton", dx, dy)
 
-            near_collision = self.vector_collision(
-                near, v)
-            far_collision = self.vector_collision(
+            near_collision = wall.vector_collision(
+                near, v_post)
+            far_collision = wall.vector_collision(
                 far, skeleton)
 
             if near_collision:
+                # wall.sprite_collide_skeleton = False
                 return near_collision
 
             else:
+                # wall.sprite_collide_skeleton = True
                 return far_collision
 
+    def get_sprite_position_adjustment(self, sprite, offset=(0, 0)):
+        near, far = self.get_sprite_collision_points(sprite, offset)
+        x, y = near
+        ix, iy = self.axis_collision(
+            (x, y), self.normal)
+        dx = ix - x
+        dy = iy - y
+        adjust = Vector("position adjustment", dx, dy)
+
+        return adjust
+
     @staticmethod
-    def handle_collision_smooth(sprite, wall):
+    def handle_collision_smooth(sprite, wall, offset=(0, 0)):
+        adjust = wall.get_sprite_position_adjustment(
+            sprite, offset)
+
+        sprite.move(adjust.get_value())
+
         sprite.velocity.scale_in_direction(
             wall.normal.get_angle(), 0
         )
@@ -400,16 +426,10 @@ class Wall(Vector):
 
     @staticmethod
     def handle_collision_mirror(sprite, wall):
-        near, far = wall.get_sprite_collision_points(sprite)
-        x, y = sprite.get_projected_position(
-            near)
-        ix, iy = wall.axis_collision(
-            (x, y), wall.normal)
-        dx = ix - x
-        dy = iy - y
-        adjust = Vector("velocity adjustment", dx, dy).scale(2)
-        sprite.move(adjust.get_value())
+        adjust = wall.get_sprite_position_adjustment(
+            sprite).scale(2)
 
+        sprite.move(adjust.get_value())
         sprite.apply_force(adjust)
 
         if wall.ground:
@@ -551,7 +571,7 @@ class PhysicsLayer(Layer):
 
     @staticmethod
     def wall_collision(sprite, wall):
-        return wall.sprite_collision(sprite)
+        return wall.sprite_collision(sprite, wall)
 
     @staticmethod
     def group_perm_collision_check(
@@ -580,9 +600,6 @@ class PhysicsLayer(Layer):
     @staticmethod
     def sprite_regions_collision_check(
             sprite, regions, collision_test, handle_collision):
-        # if sprite.velocity.j_hat < 0:
-        sprite.set_off_ground()
-
         for region in regions:
             if collision_test(sprite, region):
                 handle_collision(sprite, region)
@@ -597,6 +614,7 @@ class PhysicsLayer(Layer):
     def get_update_methods(self):
         um = super(PhysicsLayer, self).get_update_methods()
 
+        print("\n--------------")
         return um + [
             self.apply_friction,
             self.apply_acceleration,
@@ -634,9 +652,20 @@ class PhysicsLayer(Layer):
                     sprite.apply_friction(cof[1])
 
     def apply_collisions(self, dt):
+        for group in self.groups:
+            for sprite in group:
+                sprite.ground_collisions = []
+
         for system in self.collision_systems:
-            method, args = system
-            method(*args)
+            system()
+
+        for group in self.groups:
+            for sprite in group:
+                sprite.ground_check.append(
+                    bool(sprite.ground_collisions)
+                )
+                if not any(sprite.ground_check):
+                    sprite.set_off_ground()
 
     @staticmethod
     def handle_collision(sprite_a, sprite_b):
@@ -767,12 +796,15 @@ class PhysicsInterface:
 
         self.ground = None
         self.last_ground = None
-        # self._last_collision_heading = "right"
+        self.last_position = None
 
         self.interface = {
             "mass": self.mass,
             "elasticity": self.elasticity
         }
+        self.ground_collisions = []
+        self.ground_check = CacheList(2)
+        self.ground_check += [False, False]
 
     def set_mass(self, mass):
         self.mass = mass
@@ -796,7 +828,7 @@ class PhysicsInterface:
         x, y = self.position
         r = self.collision_region
         x += (r.width / 2) + r.x
-        y += (r.width / 2) + r.y
+        y += (r.height / 2) + r.y
 
         return x, y
 
@@ -875,6 +907,7 @@ class PhysicsInterface:
 
     def set_on_ground(self, ground):
         self.ground = ground
+        self.ground_collisions.append(ground)
 
     def set_off_ground(self):
         if self.ground:
@@ -925,6 +958,33 @@ class PhysicsInterface:
         else:
             return 0
 
+    def get_ground_anchor(self):
+        g = self.ground
+        if not g:
+                return None
+
+        y1, y2 = g.origin[1], g.end_point[1]
+        x, y = self.collision_point
+        mid_y = (y1 + y2) / 2
+        if abs(y1 - y2) > SCREEN_SIZE[1] / 2:
+            anchor = x, y
+
+        else:
+            anchor = x, mid_y
+
+        return anchor
+
+    def get_last_velocity(self):
+        if not self.last_position:
+            return Vector("post velocity", 0, 0)
+
+        x, y = self.last_position
+        dx, dy = self.position
+        dx -= x
+        dy -= y
+
+        return Vector("post velocity", dx, dy)
+
     def get_friction_velocity(self):
         v = self.velocity.get_copy()
         friction = v.get_friction_vector(self.friction)
@@ -948,6 +1008,8 @@ class PhysicsInterface:
         self.forces = []
 
     def apply_velocity(self):
+        self.last_position = self.position
+
         scalar = 1 / self.mass
         movement = self.velocity.get_copy(scale=scalar)
         movement.name = "movement"
@@ -957,5 +1019,3 @@ class PhysicsInterface:
         friction = self.velocity.get_friction_vector(cof)
         self.apply_force(friction)
         self.friction = cof
-
-

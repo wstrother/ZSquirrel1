@@ -6,14 +6,15 @@ from zs_constants.paths import BG_LAYERS
 from zs_src.classes import Meter
 from zs_src.entities import Layer
 from zs_src.graphics import IconGraphics
-from zs_src.regions import RectRegion
+from zs_src.physics import PhysicsInterface
+from zs_src.regions import RectRegion, Region
 
 
-class Camera:
+class Camera(PhysicsInterface):
     WINDOW_COLOR = (0, 255, 255)
 
     class Window(RectRegion):
-        def __init__(self, screen_size, window_size, shift_range, offset=(0, 0)):
+        def __init__(self, screen_size, window_size, shift, offset):
             rect = pygame.Rect((0, 0), window_size)
             x, y = screen_size[0] / 2, screen_size[1] / 2
             x += offset[0]
@@ -22,35 +23,64 @@ class Camera:
             super(Camera.Window, self).__init__(
                 "camera window", rect)
 
-            dx, dy = shift_range
+            self.offsets = self.get_offset_meters(
+                (x, y), shift
+            )
+
+        @staticmethod
+        def get_offset_meters(values, shift):
+            x, y = values
+            dx, dy = shift
+
             x_min = x - (dx / 2)
             x_max = x + (dx / 2)
             y_min = y - (dy / 2)
             y_max = y + (dy / 2)
 
-            self.x_offset = Meter(
+            x_offset = Meter(
                 "x_offset", x, x_max, x_min)
-            self.y_offset = Meter(
+            y_offset = Meter(
                 "y_offset", y, y_max, y_min)
 
+            return x_offset, y_offset
+
+        def shift(self, shift):
+            dx, dy = shift
+            xo, yo = self.offsets
+            xo.value += dx
+            yo.value += dy
+
         def get_rect(self):
+            x, y = self.offsets
             r = super(Camera.Window, self).get_rect()
-            x, y = self.x_offset.value, self.y_offset.value
-            r.center = x, y
+            r.center = x.value, y.value
 
             return r
 
-        def shift(self, value):
-            dx, dy = value
-            self.x_offset.value += dx
-            self.y_offset.value += dy
-
     def __init__(self, size):
-        self.position = -300, 0
+        super(Camera, self).__init__(1, 0)
+        self.rect = pygame.Rect((0, 0), size)
+        self.position = 0, 0
         self.size = size
         self.scale = 1
-        self.window = Camera.Window(size, (260, 400), (300, 100), offset=(0, 50))
-        self.visible = False
+
+        self.visible = True
+
+        self.windows = []
+        self.anchor = (0, 0)
+
+    def make_window(self, window_size,
+                    shift=(0, 0), offset=(0, 0)):
+
+        w = self.Window(
+            self.size, window_size, shift, offset
+        )
+        self.windows.append(w)
+        return w
+
+    @property
+    def collision_region(self):
+        return self.rect
 
     @property
     def focus_point(self):
@@ -85,10 +115,11 @@ class Camera:
 
         return -x, -y
 
-    def draw_window(self, screen):
-        pygame.draw.rect(
-            screen, self.WINDOW_COLOR,
-            self.window.get_rect(), 1)
+    def draw(self, screen):
+        for w in self.windows:
+            pygame.draw.rect(
+                screen, self.WINDOW_COLOR,
+                w.get_rect(), 1)
 
         x, y = self.get_screen_position(
             self.focus_point)
@@ -96,6 +127,24 @@ class Camera:
         pygame.draw.circle(
             screen, self.WINDOW_COLOR,
             (x, y), 5, 1)
+        self.velocity.draw(
+            screen, self.WINDOW_COLOR, (x, y))
+
+        xa, ya = self.anchor
+        if ya:
+            start = x - 100, ya
+            end = x + 100, ya
+            pygame.draw.line(
+                screen, self.WINDOW_COLOR,
+                start, end, 5
+            )
+        if xa:
+            start = xa, y - 100
+            end = xa, y + 100
+            pygame.draw.line(
+                screen, self.WINDOW_COLOR,
+                start, end, 5
+            )
 
     def outside_window(self, window, point):
         point = self.get_screen_position(point)
@@ -138,7 +187,8 @@ class Camera:
         dx *= rate
         dy *= rate
 
-        self.move((dx, dy))
+        self.apply_force(
+            self.Vector("tracking", dx, dy))
 
     def window_track(self, window, point, rate):
         outside = self.outside_window(window, point)
@@ -147,7 +197,28 @@ class Camera:
             dx, dy = outside
             dx *= rate
             dy *= rate
-            self.move((dx, dy))
+            self.apply_force(
+                self.Vector("tracking", dx, dy))
+
+    def anchor_track(self, point, rate):
+        xa, ya = self.anchor
+        sx, sy = self.get_screen_position(point)
+        fx, fy = self.focus_point
+
+        dx, dy = 0, 0
+        if xa and xa != sx:
+            dx = xa - sx
+
+        if ya and ya != sy:
+            dy = ya - sy
+
+        fx -= dx
+        fy -= dy
+        self.track((fx, fy), rate)
+
+    # def apply_velocity(self):
+    #     super(Camera, self).apply_velocity()
+    #     self.velocity.scale(0)
 
 
 class CameraLayer(Layer):
@@ -156,7 +227,11 @@ class CameraLayer(Layer):
         self.camera = Camera(self.size)
         self.bg_layers = []
 
-        self.set_value("tracking_point", None)
+        self.track_functions = []
+        self.collision_systems = []
+
+        self.camera_windows = {}
+        self.regions = []
 
         def toggle_visible():
             self.camera.visible = not self.camera.visible
@@ -164,25 +239,189 @@ class CameraLayer(Layer):
         self.interface = {
             "Toggle window visibility": toggle_visible,
         }
+        # self._positions = CacheList(2)
+        # self._positions.append((0, 0))
 
-    def track_sprite_to_window(self, sprite, window, rate):
-        self.model.link_object(sprite, "tracking_point",
-                               lambda s: s.collision_point)
+    def set_up_windows(self, *windows):
+        for w in windows:
+            name, args = w
+            self.camera_windows[name] = self.camera.make_window(
+                *args
+            )
 
-        def set_camera(point):
-            self.camera.window_track(window, point, rate)
+    def set_anchor(self, value, vertical=True):
+        if not vertical:
+            self.camera.anchor = value, 0
 
-        self.model.link_value("tracking_point", set_camera)
+        else:
+            self.camera.anchor = 0, value
 
-    def track_sprite_heading_to_window(self, sprite, window, rate):
-        value_name = sprite.name + "_heading"
-        self.model.link_object(
-            sprite, value_name,
-            lambda s: (s.collision_point, s))
+    def set_edge_bounds(self, span, vertical=False):
+        if not vertical:
+            self.h_span = span
 
-        def set_heading(value):
-            s = value[1]
-            velocity, direction = s.velocity.get_value(), s.direction
+        else:
+            self.v_span = span
+
+    def update(self, dt):
+        super(CameraLayer, self).update(dt)
+
+        self.camera.apply_acceleration()
+        self.camera.apply_velocity()
+
+        for func in self.track_functions:
+            func()
+
+        for system in self.collision_systems:
+            system()
+
+        self.camera.velocity.scale(0)
+
+    @staticmethod
+    def get_collision_vars(camera, wall):
+        angle = wall.get_angle()
+        angles = [(x / 4) + .125 for x in range(4)]
+
+        r = camera.rect.copy()
+        r.topleft = camera.position
+
+        p1, p2 = wall.origin, wall.end_point
+
+        return angle, r, p1, p2
+
+    @staticmethod
+    def check_collision(camera, wall):
+        angle, r, p1, p2 = CameraLayer.get_collision_vars(
+            camera, wall
+        )
+        v = camera.get_last_velocity()
+        collision = False
+        mid_x = (p1[0] + p2[0]) / 2
+        mid_y = (p1[1] + p2[1]) / 2
+
+        # BOTTOM EDGE >
+        if angle == 0:
+            if r.bottom > mid_y and not r.centery > mid_y:
+                if not (r.right < p1[0] or r.left > p2[0]):
+                    collision = True
+
+        # RIGHT EDGE ^
+        if angle == .25:
+            if r.right > mid_x and not r.centerx > mid_x:
+                if not (r.bottom < p2[1] or r.top > p1[1]):
+                    collision = True
+
+        # TOP EDGE <
+        if angle == .5:
+            if r.top < mid_y and not r.centery < mid_y:
+                if not (r.right < p2[0] or r.left > p1[0]):
+                    collision = True
+
+        # LEFT EDGE v
+        if angle == .75:
+            if r.left < mid_x and not r.centerx < mid_x:
+                print("left")
+                if not (r.bottom < p1[1] or r.top > p2[1]):
+                    print("collision")
+                    collision = True
+
+        if collision:
+            return wall.axis_collision(
+                camera.collision_point, v)
+
+    @staticmethod
+    def handle_collision(camera, wall):
+        angle, r, p1, p2 = CameraLayer.get_collision_vars(
+            camera, wall
+        )
+
+        if angle == 0:
+            print("BOTTOM")
+            r.bottom = p1[1]
+
+        if angle == .25:
+            print("RIGHT")
+            r.right = p1[0]
+
+        if angle == .5:
+            print("TOP")
+            r.top = p1[1]
+
+        if angle == .75:
+            print("LEFT")
+            r.left = p1[0]
+
+        camera.focus_point = r.center
+
+    def set_camera_bounds_region(self, size, position=(0, 0),
+                                 orientation=False, **kwargs):
+        region = RectRegion(
+            "camera bounds", pygame.Rect(position, size),
+            orientation=orientation, **kwargs)
+
+        self.collision_systems.append(
+            region.get_collision_system(
+                [self.camera], self.check_collision,
+                self.handle_collision)
+        )
+
+        self.regions.append(region)
+
+    def set_camera_bounds_shape(self, *points, **kwargs):
+        region = Region("camera bounds region", *points, **kwargs)
+
+        self.collision_systems.append(
+            region.get_collision_system(
+                [self.camera], self.check_collision,
+                self.handle_collision)
+        )
+
+        self.regions.append(region)
+
+    def set_tracking_point_function(self, get_point, rate):
+        def set_camera():
+            p = get_point()
+            self.camera.track(p, rate)
+
+        self.track_functions.append(set_camera)
+
+    def set_sprite_window_track(self, sprite, name, rate):
+        window = self.camera_windows[name]
+
+        def set_camera():
+            point = sprite.collision_point
+            self.camera.window_track(
+                window, point, rate
+            )
+
+            return point
+
+        self.track_functions.append(set_camera)
+
+    def set_anchor_track_function(self, get_point, check_func, rate):
+        def track_anchor():
+            if check_func():
+                self.camera.anchor_track(
+                    get_point(), rate
+                )
+
+        self.track_functions.append(track_anchor)
+
+    def set_anchor_position_function(self, get_position, span, vertical=True):
+        meter = Meter("span", span[0], span[1], span[0])
+
+        def set_anchor():
+            meter.value = get_position()
+            self.set_anchor(meter.value, vertical)
+
+        self.track_functions.append(set_anchor)
+
+    def track_window_to_sprite_heading(self, sprite, name, rate):
+        window = self.camera_windows[name]
+
+        def set_heading():
+            velocity = sprite.velocity.get_value()
+            direction = sprite.direction
             vx, vy = velocity
             dx, dy = direction
 
@@ -199,8 +438,7 @@ class CameraLayer(Layer):
 
             window.shift((x, y))
 
-        self.model.link_value(
-            value_name, set_heading)
+        self.track_functions.append(set_heading)
 
     def add_bg_layer(self, bg_image, scale, **kwargs):
         l = ParallaxBgLayer(
@@ -230,7 +468,11 @@ class CameraLayer(Layer):
                 screen, self.camera.get_offset())
 
         if self.camera.visible:
-            self.camera.draw_window(screen)
+            self.camera.draw(screen)
+
+            for region in self.regions:
+                region.draw(
+                    screen, offset=self.camera.get_offset())
 
     def draw_bg_layers(self, screen):
         for layer in self.bg_layers:

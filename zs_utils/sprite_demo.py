@@ -1,6 +1,7 @@
 from types import FunctionType, MethodType
 
 from zs_constants.sprite_demo import GRAVITY, COF
+from zs_constants.zs import SCREEN_SIZE
 from zs_src.camera import CameraLayer
 from zs_src.camera import ParallaxBgLayer
 from zs_src.controller import Command, Step
@@ -38,6 +39,7 @@ class SpriteDemo(Layer):
 
         debug_layer = DebugLayer(self)
         self.add_sub_layer(debug_layer)
+        self.debug_layer = debug_layer
 
         context.set_up_bg_layers(camera_layer)
         context.set_up_collisions(sprite_layer)
@@ -48,7 +50,10 @@ class SpriteDemo(Layer):
             self, sprite_layer, debug_layer, camera_layer)
 
         self.set_value(
-            "frame_advance", True)
+            "camera", camera_layer.camera
+        )
+        self.set_value(
+            "frame_advance", False)
         self.set_value(
             "spawn", context.spawn_sprite)
         self.set_value(
@@ -56,8 +61,6 @@ class SpriteDemo(Layer):
         self.set_value("dt", 0)
 
     def handle_controller(self):
-        super(SpriteDemo, self).handle_controller()
-
         if self.controller.check_command("double tap up"):
             if not self.paused:
                 self.set_value("frame_advance", False)
@@ -81,17 +84,21 @@ class SpriteDemo(Layer):
             else:
                 self.camera_layer.active = True
 
+        super(SpriteDemo, self).handle_controller()
+
     def populate(self):
         # # REPLACE WITH DATA FROM CONFIG VALUE FILE LOOKUP
         spawn = self.context.spawn_sprite
 
-        spawn("yoshi", position=(500, 300))
-        spawn("yoshi", position=(200, 300))
+        # spawn("yoshi", position=(500, 300))
+        # spawn("yoshi", position=(200, 300))
 
         player = spawn("player", position=(450, 100))
         self.set_value("player", player)
-        self.sprite_layer.toggle_hitbox_layer()
-        self.sprite_layer.toggle_vector_layer()
+        # self.sprite_layer.toggle_vector_layer()
+        # self.sprite_layer.toggle_hitbox_layer()
+        # self.debug_layer.visible = True
+        # self.set_value("frame_advance", True)
 
     def reset_controllers(self):
         for sprite in self.main_group:
@@ -104,11 +111,50 @@ class SpriteDemo(Layer):
         super(SpriteDemo, self).on_spawn()
 
         player = self.get_value("player")
-        window = self.camera_layer.camera.window
-        self.camera_layer.track_sprite_to_window(
-            player, window, 1 / 8)
-        self.camera_layer.track_sprite_heading_to_window(
-            player, window, 4 / 3)
+
+        w1 = ("slow_push", [(450, 350), (300, 150), (0, 75)])
+        w2 = ("fast_push", [(550, 500), (350, 0)])
+        self.camera_layer.set_up_windows(w1, w2)
+        camera_layer = self.camera_layer
+
+        # camera_layer.set_tracking_point_function(
+        #     lambda: player.collision_point, 1/2
+        # )
+
+        camera_layer.set_sprite_window_track(
+            player, "slow_push", .08)
+        camera_layer.set_sprite_window_track(
+            player, "fast_push", .5)
+        camera_layer.track_window_to_sprite_heading(
+            player, "slow_push", 1.5)
+        camera_layer.track_window_to_sprite_heading(
+            player, "fast_push", .5)
+
+        camera_layer.set_anchor_track_function(
+            lambda: player.get_ground_anchor(),
+            lambda: player.is_grounded(), .05
+        )
+
+        a_min = 450
+        a_max = 550
+
+        def get_position():
+            span = a_max - a_min
+            x, y = camera_layer.camera.position
+            r = y / SCREEN_SIZE[1]
+            value = r * span
+
+            return value + 450
+
+        camera_layer.set_anchor_position_function(
+            get_position, (a_min, a_max)
+        )
+
+        camera_layer.set_camera_bounds_region(
+            (SCREEN_SIZE[0] * 3.5, SCREEN_SIZE[1] * 3),
+            (-50, -600))
+        # camera_layer.set_camera_bounds_region(
+        #     (800, 1000), (2020, 400), orientation=True)
 
 
 class ContextManager:
@@ -158,8 +204,8 @@ class ContextManager:
 
     def set_up_collisions(self, layer):
         group = self.environment.main_group
-        a = 300, 300
-        b = 750, 450
+        a = 0, 300
+        b = 2999, 2300
         walls = [Wall(a, b, ground=True),
                  Wall((160, 390), (160, 670)),
                  Wall((800, 550), (1050, 360), True),
@@ -170,7 +216,10 @@ class ContextManager:
                  Wall((2200, -120), (2500, -220), True),
                  Wall((2500, -220), (2200, -120)),
                  Wall((0, 720), (1999, 720), True)]
-        # walls = [Wall((0, 550), (1999, 550), True)]
+        # walls = [
+        #     Wall((0, 0), (1999, 1999), True),
+        #     Wall((50, 0), (500, 0), True)
+        # ]
         layer.add_wall_layer(walls)
         layer.groups.append(group)
         layer.add_hitbox_layer(group)
@@ -178,16 +227,16 @@ class ContextManager:
 
         # SPRITE COLLISION SYSTEM
         layer.collision_systems.append(
-            [layer.group_perm_collision_check,
-             (group, layer.sprite_collision,
-              layer.handle_collision)]
+            lambda: layer.group_perm_collision_check(
+                group, layer.sprite_collision,
+                layer.handle_collision)
         )
 
         #
         layer.collision_systems.append(
-            [layer.group_regions_collision_check,
-             (group, walls, layer.wall_collision,
-              Wall.handle_collision_smooth)]
+            lambda: layer.group_regions_collision_check(
+                group, walls, layer.wall_collision,
+                Wall.handle_collision_smooth)
         )
 
     @staticmethod
@@ -350,10 +399,12 @@ class SpriteDemoMachine(AnimationMachine):
             return neutral
 
     def on_v_acceleration_0(self):
-        if self.sprite.velocity:
-            apex = self.sprite.velocity.j_hat >= 0
+        vy = self.sprite.velocity.j_hat
+        ay = self.sprite.acceleration.j_hat
 
-            return apex
+        apex = vy >= 0 and ay >= 0
+
+        return apex
 
     def on_ground_collision(self):
         return self.sprite.is_grounded()
@@ -444,6 +495,7 @@ class DemoSprite(CharacterSprite):
             if state == "jump_up" and frame_number < 5:
                 if frame_number == 0:
                     dy = base_jump
+                    self.set_off_ground()
                 else:
                     jump_height = self.meters["jump"].get_ratio()
                     jump_height += 3 / self.meters["jump"].maximum
@@ -452,6 +504,7 @@ class DemoSprite(CharacterSprite):
                 jump = self.get_jump_vector(dy).rotate(
                     (1 / 32) * -x)
 
+                print("\t", jump)
                 self.apply_force(jump)
 
             # FACE DIRECTION
