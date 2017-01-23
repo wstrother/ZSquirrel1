@@ -69,7 +69,6 @@ class CharacterSprite(PhysicsInterface, AnimationSprite):
 
         self.controller = None
         self.direction = RIGHT
-        self._position = 0.0, 0.0
         self.adjust_position(self.rect.topleft)
 
         self.meters = {}
@@ -81,19 +80,6 @@ class CharacterSprite(PhysicsInterface, AnimationSprite):
             meter = ChargeMeter(name, value, *args)
 
         self.meters[name] = meter
-
-    @property
-    def position(self):
-        return self._position
-
-    @position.setter
-    def position(self, value):
-        self.adjust_position(value)
-
-    def adjust_position(self, value):
-        self._position = value
-        x, y = value
-        self.rect.topleft = round(x), round(y)
 
     def set_controller(self, controller):
         self.controller = controller

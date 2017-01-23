@@ -11,4 +11,5 @@ B = "b"
 DPAD = "dpad"
 ADVANCE = (A,)
 BACK = (B,)
+START = "start"
 

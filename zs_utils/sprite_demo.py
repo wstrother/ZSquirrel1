@@ -1,94 +1,257 @@
-from types import FunctionType, MethodType
+from collections import OrderedDict
 
 from zs_constants.sprite_demo import GRAVITY, COF
-from zs_constants.zs import SCREEN_SIZE
-from zs_src.camera import CameraLayer
-from zs_src.camera import ParallaxBgLayer
-from zs_src.controller import Command, Step
-from zs_src.entities import Layer
-from zs_src.physics import PhysicsLayer, Wall
+from zs_src.camera import CameraLayer, ParallaxBgLayer
+from zs_src.context import ContextManager, ContextLayer, RegionLayer
+from zs_src.controller import Step, Command
+from zs_src.physics import PhysicsLayer
+from zs_src.regions import Wall, Region
 from zs_src.resource_library import get_resources
 from zs_src.sprites import CharacterSprite
 from zs_src.state_machines import AnimationMachine
 from zs_utils.debug_utils import PauseMenu, DebugLayer
 
 
-class SpriteDemo(Layer):
+class SpriteDemoContext(ContextManager):
+    def set_up_bg_layers(self, layer):
+        trees = "smalltree", "midtree", "bigtree"
+        get = ParallaxBgLayer.get_bg_image
+
+        def get_scale(name):
+            full_w = get("bigtree.gif").get_size()[0]
+            w = get(name).get_size()[0]
+
+            return w / full_w
+
+        bg_layers = []
+        for tree in trees:
+            scale = get_scale(tree + ".gif")
+            offset = 200
+            depth = 70
+            position = 0, (depth * scale) + offset
+
+            bg_layers.append(ParallaxBgLayer(
+                get(tree + ".gif"), scale,
+                buffer=(50, 0), wrap=(True, False),
+                position=position)
+            )
+
+        super(SpriteDemoContext, self).set_up_bg_layers(
+            layer, *bg_layers)
+
+    def set_up_layer_dict(self):
+        group = self.environment.main_group
+
+        ld = OrderedDict()
+        ld["Camera Layer"] = {
+                "layer": CameraLayer("Camera Layer"),
+                "pause": True,
+                "frame_advance": True,
+                "bg_layers": (True,),
+                "camera": (True,)
+            }
+        ld["Walls Layer"] = {
+                "layer": RegionLayer("Walls Layer"),
+                "regions": (True,),
+                "parent_layer": "Camera Layer"
+            }
+        ld["Sprite Layer"] = {
+                "layer": PhysicsLayer("Sprite Layer", GRAVITY, COF),
+                "controllers": True,
+                "parent_layer": "Camera Layer",
+                "collisions": (True,),
+                "groups": (group,)
+            }
+        ld["Debug Layer"] = {
+                "layer": DebugLayer(self.environment),
+                "huds": (True,)
+            }
+        ld["Pause Menu"] = {
+                "layer": PauseMenu(self.environment)
+            }
+
+        return ld
+
+    def set_up_sprite_dict(self):
+        group = self.environment.main_group
+
+        d = {
+            "player": {
+                "load": lambda **kwargs: DemoSprite("player", **kwargs),
+                "controller": 0,
+                "graphics": "squirrel",
+                "animation_machine": SpriteDemoMachine,
+                "layer": "Sprite Layer",
+                "group": group},
+            "yoshi": {
+                "load": lambda **kwargs: DemoSprite("yoshi", **kwargs),
+                "graphics": "yoshi",
+                "animation_machine": SpriteDemoMachine,
+                "layer": "Sprite Layer",
+                "group": group},
+            "squirrel2": {
+                "load": lambda **kwargs: DemoSprite("squirrel2", **kwargs),
+                "controller": 2,
+                "graphics": "squirrel",
+                "sprite_sheet": "squirrel2",
+                "animation_machine": SpriteDemoMachine,
+                "layer": "Sprite Layer",
+                "group": group}
+        }
+
+        return d
+
+    def set_up_regions(self, layer, *args):
+        group = RegionLayer.make_group()
+        walls = [Wall((160, 390), (160, 670)),
+                 Wall((800, 550), (1050, 360), True),
+                 Wall((1050, 360), (800, 550)),
+                 Wall((1200, 470), (1430, 280), True),
+                 Wall((1620, 280), (2250, 150), True),
+                 Wall((2490, 90), (2790, -180), True),
+                 Wall((2200, -120), (2500, -220), True),
+                 Wall((2500, -220), (2200, -120)),
+                 Wall((0, 720), (1999, 720), True)]
+        # walls = [
+        #     Wall((0, 900), (2500, 200), True),
+        #     Wall((50, 0), (500, 0), True)
+        # ]
+        region = Region("Level Walls")
+        region.walls = walls
+        region.add(group)
+
+        super(SpriteDemoContext, self).set_up_regions(layer, group)
+
+    def set_up_collisions(self, layer, *args):
+        group = self.environment.main_group
+        walls_layer = self.get_layer("Walls Layer")
+
+        # SPRITE COLLISION SYSTEM
+        collision_systems = walls_layer.get_collision_system_list(
+            group, Wall.sprite_collision, Wall.handle_collision_smooth)
+        collision_systems.append(
+            lambda: PhysicsLayer.group_perm_collision_check(
+                group, PhysicsLayer.sprite_collision,
+                PhysicsLayer.handle_collision)
+        )
+
+        super(SpriteDemoContext, self).set_up_collisions(
+            layer, *collision_systems)
+
+    def set_up_command_dict(self):
+        press_left = Step("press_left",
+                          [lambda f: f[0][0] == -1])
+        press_right = Step("press_right",
+                           [lambda f: f[0][0] == 1])
+        neutral = Step("neutral dpad",
+                       [lambda f: f[0] == (0, 0)])
+        press_up = Step("press_up",
+                        [lambda f: f[0][1] == -1])
+
+        window = 20
+        commands = {
+            "double tap right": Command(
+                "double tap right",
+                [neutral, press_right, neutral, press_right],
+                ["dpad"], window),
+            "double tap left": Command(
+                "double tap left",
+                [neutral, press_left, neutral, press_left],
+                ["dpad"], window),
+            "double tap up": Command(
+                "double tap up",
+                [neutral, press_up, neutral, press_up],
+                ["dpad"], window)
+        }
+
+        return commands
+
+    def set_up_huds(self, layer, *args):
+        super(SpriteDemoContext, self).set_up_huds(layer, *args)
+
+    def set_up_camera(self, layer, *args):
+        # super(SpriteDemoContext, self).set_up_camera(*args)
+        camera_layer = self.get_layer("Camera Layer")
+
+        player = self.get_value("player")
+
+        # w1 = ("slow_push", [(450, 350), (300, 150), (0, 75)])
+        # w2 = ("fast_push", [(550, 500), (350, 0)])
+        #
+        # # BUILD CAMERA WINDOWS
+        # camera_layer.set_up_windows(w1, w2)
+
+        # TRACK CAMERA FUNCTION
+        camera_layer.set_tracking_point_function(
+            lambda: player.collision_point, 1/4
+        )
+        #
+        # camera_layer.set_sprite_window_track(
+        #     player, "slow_push", .08)
+        # camera_layer.set_sprite_window_track(
+        #     player, "fast_push", .5)
+        # camera_layer.track_window_to_sprite_heading(
+        #     player, "slow_push", 1.5)
+        # camera_layer.track_window_to_sprite_heading(
+        #     player, "fast_push", .5)
+
+        # TRACK ANCHOR FUNCTION
+        # camera_layer.set_anchor_track_function(
+        #     lambda: player.get_ground_anchor(),
+        #     lambda: player.is_grounded(), .05
+        # )
+        #
+        # a_min = 450
+        # a_max = 550
+        #
+        # def get_position():
+        #     span = a_max - a_min
+        #     x, y = camera_layer.camera.position
+        #     r = y / SCREEN_SIZE[1]
+        #     value = r * span
+        #
+        #     return value + 450
+        #
+        # camera_layer.set_anchor_position_function(
+        #     get_position, (a_min, a_max)
+        # )
+
+        # SET CAMERA BOUNDS
+
+        # SET CAMERA SCALE
+        # def get_scale(p):
+        #     x, y = p.position
+        #     disp = x / 2500
+        #
+        #     return 1 + ((1 - disp) * 2)
+        #
+        # self.model.link_object(
+        #     player, "camera_scale", get_scale
+        # )
+        #
+        # def set_scale(value):
+        #     if value < 1.5:
+        #         value = 1.5
+        #     if value > 2.5:
+        #         value = 2
+        #     self.camera_layer.camera.scale = value
+
+        # self.model.link_value(
+        #     "camera_scale", set_scale
+        # )
+        # self.set_value("camera_scale", get_scale(player))
+
+
+class SpriteDemo(ContextLayer):
     def __init__(self, **kwargs):
-        super(SpriteDemo, self).__init__("Sprite Demo", **kwargs)
         self.main_group = self.make_group()
-
-        context = ContextManager(self)
-        self.context = context
-
-        camera_layer = CameraLayer("Camera Layer")
-        self.camera_layer = camera_layer
-        self.add_sub_layer(camera_layer)
-
-        sprite_layer = PhysicsLayer(
-            GRAVITY, COF, "Physics Layer")
-        self.sprite_layer = sprite_layer
-
-        self.model.link_object(
-            self, "game_paused", lambda env: env.paused)
-        self.model.link_value(
-            "game_paused", lambda b: camera_layer.set_active(not b)
-        )
-        camera_layer.add_sub_layer(
-            sprite_layer)
-
-        debug_layer = DebugLayer(self)
-        self.add_sub_layer(debug_layer)
-        self.debug_layer = debug_layer
-
-        context.set_up_bg_layers(camera_layer)
-        context.set_up_collisions(sprite_layer)
-        context.link_interface(
-            sprite_layer, debug_layer, camera_layer)
-
-        self.pause_menu = PauseMenu(
-            self, sprite_layer, debug_layer, camera_layer)
-
-        self.set_value(
-            "camera", camera_layer.camera
-        )
-        self.set_value(
-            "frame_advance", False)
-        self.set_value(
-            "spawn", context.spawn_sprite)
-        self.set_value(
-            "sprite_dict", context.set_up_sprite_dict())
-        self.set_value("dt", 0)
-
-    def handle_controller(self):
-        if self.controller.check_command("double tap up"):
-            if not self.paused:
-                self.set_value("frame_advance", False)
-
-        devices = self.controller.devices
-        start = devices["start"]
-        frame_advance = self.get_value("frame_advance")
-        pause_ok = not self.paused and not frame_advance
-
-        if start.check() and pause_ok:
-            self.queue_events(("pause",
-                               ("layer",
-                                self.pause_menu)))
-
-        if frame_advance:
-            if start.held:
-                if devices["a"].check():
-                    self.camera_layer.active = True
-                else:
-                    self.camera_layer.active = False
-            else:
-                self.camera_layer.active = True
-
-        super(SpriteDemo, self).handle_controller()
+        super(SpriteDemo, self).__init__(
+            "Sprite Demo", SpriteDemoContext, **kwargs)
 
     def populate(self):
+        # pass
         # # REPLACE WITH DATA FROM CONFIG VALUE FILE LOOKUP
-        spawn = self.context.spawn_sprite
+        spawn = self.get_value("spawn")
 
         # spawn("yoshi", position=(500, 300))
         # spawn("yoshi", position=(200, 300))
@@ -100,247 +263,8 @@ class SpriteDemo(Layer):
         # self.debug_layer.visible = True
         # self.set_value("frame_advance", True)
 
-    def reset_controllers(self):
-        for sprite in self.main_group:
-            self.context.set_sprite_controller(sprite)
-
     def on_spawn(self):
-        context = self.context
-        context.set_up_controllers()
-
         super(SpriteDemo, self).on_spawn()
-
-        player = self.get_value("player")
-
-        w1 = ("slow_push", [(450, 350), (300, 150), (0, 75)])
-        w2 = ("fast_push", [(550, 500), (350, 0)])
-        self.camera_layer.set_up_windows(w1, w2)
-        camera_layer = self.camera_layer
-
-        # camera_layer.set_tracking_point_function(
-        #     lambda: player.collision_point, 1/2
-        # )
-
-        camera_layer.set_sprite_window_track(
-            player, "slow_push", .08)
-        camera_layer.set_sprite_window_track(
-            player, "fast_push", .5)
-        camera_layer.track_window_to_sprite_heading(
-            player, "slow_push", 1.5)
-        camera_layer.track_window_to_sprite_heading(
-            player, "fast_push", .5)
-
-        camera_layer.set_anchor_track_function(
-            lambda: player.get_ground_anchor(),
-            lambda: player.is_grounded(), .05
-        )
-
-        a_min = 450
-        a_max = 550
-
-        def get_position():
-            span = a_max - a_min
-            x, y = camera_layer.camera.position
-            r = y / SCREEN_SIZE[1]
-            value = r * span
-
-            return value + 450
-
-        camera_layer.set_anchor_position_function(
-            get_position, (a_min, a_max)
-        )
-
-        camera_layer.set_camera_bounds_region(
-            (SCREEN_SIZE[0] * 3.5, SCREEN_SIZE[1] * 3),
-            (-50, -600))
-        # camera_layer.set_camera_bounds_region(
-        #     (800, 1000), (2020, 400), orientation=True)
-
-
-class ContextManager:
-    def __init__(self, environment):
-        self.environment = environment
-        self.model = environment.model
-        self.set_value = environment.set_value
-        self.get_value = environment.get_value
-
-    def link_interface(self, *items):
-        for item in items:
-            model = self.environment.model
-            if "_" + item.name not in model.values:
-                self.environment.set_value(
-                    "_" + item.name, item.interface
-                )
-
-            for value_name in item.interface:
-                value = item.interface[value_name]
-
-                if type(value) not in (FunctionType, MethodType):
-                    set_method = getattr(item, "set_" + value_name)
-
-                    model.link_sub_value("_" + item.name, value_name,
-                                         set_method)
-
-    @staticmethod
-    def set_up_bg_layers(layer):
-        trees = "smalltree", "midtree", "bigtree"
-        get = ParallaxBgLayer.get_bg_image
-
-        def get_scale(name):
-            full_w = get("bigtree").get_size()[0]
-            w = get(name).get_size()[0]
-
-            return w / full_w
-
-        for tree in trees:
-            scale = get_scale(tree)
-            offset = 250
-            depth = 30
-            position = 0, (depth * scale) + offset
-
-            layer.add_bg_layer(
-                tree, scale, buffer=(50, 0),
-                wrap=(True, False), position=position)
-
-    def set_up_collisions(self, layer):
-        group = self.environment.main_group
-        a = 0, 300
-        b = 2999, 2300
-        walls = [Wall(a, b, ground=True),
-                 Wall((160, 390), (160, 670)),
-                 Wall((800, 550), (1050, 360), True),
-                 Wall((1050, 360), (800, 550)),
-                 Wall((1200, 470), (1430, 280), True),
-                 Wall((1620, 280), (2250, 150), True),
-                 Wall((2490, 90), (2790, -180), True),
-                 Wall((2200, -120), (2500, -220), True),
-                 Wall((2500, -220), (2200, -120)),
-                 Wall((0, 720), (1999, 720), True)]
-        # walls = [
-        #     Wall((0, 0), (1999, 1999), True),
-        #     Wall((50, 0), (500, 0), True)
-        # ]
-        layer.add_wall_layer(walls)
-        layer.groups.append(group)
-        layer.add_hitbox_layer(group)
-        layer.add_vector_layer(group)
-
-        # SPRITE COLLISION SYSTEM
-        layer.collision_systems.append(
-            lambda: layer.group_perm_collision_check(
-                group, layer.sprite_collision,
-                layer.handle_collision)
-        )
-
-        #
-        layer.collision_systems.append(
-            lambda: layer.group_regions_collision_check(
-                group, walls, layer.wall_collision,
-                Wall.handle_collision_smooth)
-        )
-
-    @staticmethod
-    def set_up_commands(controller):
-        press_left = Step("press_left",
-                          [lambda f: f[0][0] == -1])
-        press_right = Step("press_right",
-                           [lambda f: f[0][0] == 1])
-        neutral = Step("neutral dpad",
-                       [lambda f: f[0] == (0, 0)])
-        press_up = Step("press_up",
-                        [lambda f: f[0][1] == -1])
-
-        window = 20
-        double_right = Command("double tap right",
-                               [neutral, press_right, neutral, press_right],
-                               ["dpad"], window)
-        double_left = Command("double tap left",
-                              [neutral, press_left, neutral, press_left],
-                              ["dpad"], window)
-        double_up = Command("double tap up",
-                            [neutral, press_up, neutral, press_up],
-                            ["dpad"], window)
-
-        for command in (double_right, double_left, double_up):
-            controller.commands.append(
-                command)
-
-    def set_up_controllers(self):
-        controllers = self.environment.controllers
-        layers = (self.environment.sprite_layer,
-                  self.environment.pause_menu)
-
-        for controller in controllers:
-            self.set_up_commands(controller)
-
-            for layer in layers:
-                layer.copy_controllers(
-                    controllers)
-
-    def set_up_sprite_dict(self):
-        group = self.environment.main_group
-
-        d = {
-            "player": {
-                "load": lambda **kwargs: DemoSprite("player", **kwargs),
-                "controller": 0,
-                "graphics": "squirrel",
-                "animation_machine": SpriteDemoMachine,
-                "group": group},
-            "yoshi": {
-                "load": lambda **kwargs: DemoSprite("yoshi", **kwargs),
-                "controller": None,
-                "graphics": "yoshi",
-                "animation_machine": SpriteDemoMachine,
-                "group": group},
-            "squirrel2": {
-                "load": lambda **kwargs: DemoSprite("squirrel2", **kwargs),
-                "controller": 2,
-                "graphics": "squirrel2",
-                "animation_machine": SpriteDemoMachine,
-                "group": group}
-        }
-
-        return d
-
-    def set_graphics(self, sprite):
-        sprite_dict = self.environment.get_value("sprite_dict")
-        name = sprite.name
-        d = sprite_dict[name]
-        stream_file = d["graphics"]
-        animation_machine = d["animation_machine"]
-
-        sprite.set_up_animations(
-            stream_file + ".gif",
-            stream_file + ".txt",
-            animation_machine)
-
-    def set_sprite_controller(self, sprite):
-        sprite_dict = self.environment.get_value("sprite_dict")
-        name = sprite.name
-        n = sprite_dict[name]["controller"]
-
-        if type(n) is int:
-            controller = self.environment.sprite_layer.controllers[n]
-        else:
-            controller = None
-
-        sprite.set_controller(controller)
-
-    def spawn_sprite(self, key, **kwargs):
-        model = self.environment.model
-        sprite_dict = model.values["sprite_dict"][key]
-        load = sprite_dict["load"]
-        group = sprite_dict["group"]
-
-        sprite = load(**kwargs)
-        sprite.add(group)
-
-        self.link_interface(sprite)
-        self.set_graphics(sprite)
-        self.set_sprite_controller(sprite)
-
-        return sprite
 
 
 class SpriteDemoMachine(AnimationMachine):

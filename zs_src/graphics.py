@@ -70,8 +70,8 @@ class Graphics:
     def add_image_set(self, name, images):
         self.image_sets[name] = ImageSet(name, images)
 
-    def draw(self, screen, offset=(0, 0)):
-        screen.blit(self.get_image(), offset)
+    def draw(self, screen, offset=(0, 0), area=None):
+        screen.blit(self.get_image(), offset, area=area)
 
     def get_image(self):
         s = self.get_image_set()

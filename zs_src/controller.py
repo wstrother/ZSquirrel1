@@ -481,7 +481,7 @@ class ZsController:
     def __init__(self, name, profile, input_manager):
         self.name = name
         self.frames = CacheList(FRAME_SLICE_SIZE)
-        self.commands = []
+        self.commands = {}
 
         self.devices = {}
         self.mapping_dict = {}
@@ -566,11 +566,8 @@ class ZsController:
 
         return frames
 
-    def check_command(self, command_name):
-        commands = self.commands
-        i = [c.name for c in commands].index(command_name)
-
-        return commands[i].active
+    def check_command(self, name):
+        return self.commands[name].active
 
     def update(self):
         self.update_frames()
@@ -578,12 +575,12 @@ class ZsController:
         for device in self.devices.values():
             device.update()
 
-        for command in self.commands:
+        for command in self.commands.values():
             frames = self.get_command_frames(*command.devices)
             command.update(frames[-1])
 
-            if command.active:
-                print(command.name)
+            # if command.active:
+            #     print(command.name)
 
     def update_frames(self):
         frame = []

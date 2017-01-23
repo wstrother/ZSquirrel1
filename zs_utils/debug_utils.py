@@ -445,11 +445,10 @@ class ListEditor(DictEditor):
 
 
 class PauseMenu(Menu):
-    def __init__(self, environment, *layers, **kwargs):
+    def __init__(self, environment, **kwargs):
         super(PauseMenu, self).__init__("Pause Menu", **kwargs)
         self.environment = environment
         self.model = environment.model
-        self.interface_layers = layers
 
         self.active = False
 
@@ -502,8 +501,14 @@ class PauseMenu(Menu):
         if in_model("sprite_dict"):
             self.add_sprite_options(mb)
 
-        if self.interface_layers:
-            self.add_layer_options(mb)
+        if in_model("layer_dict"):
+            ld = self.get_value("layer_dict")
+            layers = [l["layer"] for l in ld.values()]
+            interface_layers = [
+                l for l in layers if hasattr(l, "interface")
+            ]
+
+            self.add_layer_options(mb, interface_layers)
 
         self.add_exit_option(mb)
 
@@ -553,10 +558,10 @@ class PauseMenu(Menu):
             mb, self.get_controller_sub_block(),
             controller_option)
 
-    def add_layer_options(self, mb):
+    def add_layer_options(self, mb, layers):
         tools = self.tools
 
-        for layer in self.interface_layers:
+        for layer in layers:
             text = "Edit {}".format(
                 layer.name)
 
@@ -777,7 +782,9 @@ class DebugLayer(HeadsUpDisplay):
 
             text = [
                 l_str.format("Focus point", f_str.format(*c.focus_point)),
-                l_str.format("Anchor values", f_str.format(*c.anchor))
+                l_str.format("Anchor values", f_str.format(*c.anchor)),
+                l_str.format("Position", f_str.format(*c.position)),
+                l_str.format("Offset", f_str.format(*c.get_offset()))
             ]
 
             return text
@@ -797,12 +804,12 @@ class DebugLayer(HeadsUpDisplay):
         player = self.get_value("player")
         camera = self.get_value("camera")
         reporters = [
-            HudBox(player, "Player", self.get_physics_interface_hud()),
+            # HudBox(camera, "Camera", self.get_physics_interface_hud()),
             # HudBox(player.animation_machine, "Animation State",
             #        self.get_animation_machine_hud(.5)),
-            # HudBox(self.model.values, "Frame Rate",
-            #        self.get_frame_rate_hud(1)),
-            HudBox(self.environment.camera_layer, "Camera", self.get_camera_hud())
+            HudBox(self.model.values, "Frame Rate",
+                   self.get_frame_rate_hud(1)),
+            # HudBox(self.environment.camera_layer, "Camera", self.get_camera_hud())
         ]
 
         block = tools.ContainerSprite(

@@ -7,25 +7,56 @@ from zs_src.classes import Meter
 from zs_src.entities import Layer
 from zs_src.graphics import IconGraphics
 from zs_src.physics import PhysicsInterface
-from zs_src.regions import RectRegion, Region
+from zs_src.regions import Region, RectRegion
 
 
 class Camera(PhysicsInterface):
     WINDOW_COLOR = (0, 255, 255)
 
     class Window(RectRegion):
-        def __init__(self, screen_size, window_size, shift, offset):
-            rect = pygame.Rect((0, 0), window_size)
-            x, y = screen_size[0] / 2, screen_size[1] / 2
+        def __init__(self, camera, window_size, shift, offset):
+            x, y = camera.size
+            x /= 2
+            y /= 2
             x += offset[0]
             y += offset[1]
-            rect.center = x, y
-            super(Camera.Window, self).__init__(
-                "camera window", rect)
 
+            self.camera = camera
+            self._size = window_size
+            self._position = (0, 0)
             self.offsets = self.get_offset_meters(
                 (x, y), shift
             )
+
+            super(Camera.Window, self).__init__(
+                "camera window", window_size,
+                (0, 0))
+
+        @property
+        def size(self):
+            x, y = self._size
+            x /= self.camera.scale
+            y /= self.camera.scale
+
+            return x, y
+
+        @size.setter
+        def size(self, value):
+            pass
+
+        @property
+        def position(self):
+            x, y = self.camera.position
+            ox, oy = self.offsets
+            x += ox.value
+            y += oy.value
+            self.center = x, y
+
+            return self._position
+
+        @position.setter
+        def position(self, value):
+            self._position = value
 
         @staticmethod
         def get_offset_meters(values, shift):
@@ -50,24 +81,55 @@ class Camera(PhysicsInterface):
             xo.value += dx
             yo.value += dy
 
-        def get_rect(self):
-            x, y = self.offsets
-            r = super(Camera.Window, self).get_rect()
-            r.center = x.value, y.value
+        def draw(self, screen, offset=(0, 0)):
+            color = Camera.WINDOW_COLOR
+            r = self.pygame_rect
+            pygame.draw.rect(
+                screen, color,
+                r, 1
+            )
 
-            return r
+            pygame.draw.circle(
+                screen, color,
+                r.center, 5, 1)
 
-    def __init__(self, size):
+    def __init__(self, size, scale=1):
         super(Camera, self).__init__(1, 0)
-        self.rect = pygame.Rect((0, 0), size)
-        self.position = 0, 0
+        self._focus_point = size[0] / 2, size[1] / 2
         self.size = size
-        self.scale = 1
+        self._scale = scale
 
         self.visible = True
-
-        self.windows = []
         self.anchor = (0, 0)
+
+        self.regions = [Camera.Window(
+                self, size,
+                (0, 0), (0, 0)
+        )]
+
+    @property
+    def collision_region(self):
+        return self.regions[0]
+
+    @property
+    def scale(self):
+        return self._scale
+
+    @scale.setter
+    def scale(self, value):
+        self._scale = value
+        for r in self.regions:
+            r.scale = value
+
+    @property
+    def focus_point(self):
+        return self._focus_point
+
+    @focus_point.setter
+    def focus_point(self, value):
+        self._focus_point = value
+        for r in self.regions:
+            r.position = value
 
     def make_window(self, window_size,
                     shift=(0, 0), offset=(0, 0)):
@@ -75,150 +137,172 @@ class Camera(PhysicsInterface):
         w = self.Window(
             self.size, window_size, shift, offset
         )
-        self.windows.append(w)
+        self.regions.append(w)
         return w
 
     @property
     def collision_region(self):
+        r = self.rect.copy()
+        r.width /= self.scale
+        r.height /= self.scale
+
         return self.rect
 
     @property
-    def focus_point(self):
-        x, y = self.position
-        x += (self.size[0] / 2) / self.scale
-        y += (self.size[1] / 2) / self.scale
+    def position(self):
+        return self.get_world_px((0, 0))
 
-        return int(x), int(y)
+    @property
+    def reticle(self):
+        w, h = self.size
+        return w / 2, h / 2
 
-    @focus_point.setter
-    def focus_point(self, value):
-        x, y = value
-        x -= (self.size[0] / 2) / self.scale
-        y -= (self.size[1] / 2) / self.scale
+    def get_world_px(self, screen_px):
+        sx, sy = screen_px
+        fx, fy = self.focus_point
 
-        self.position = int(x), int(y)
+        # delta = (reticle) - (screen px value)
+        rx, ry = self.reticle
+        dx = rx - sx
+        dy = ry - sy
 
-    def get_screen_position(self, position):
-        x, y = position
-        dx, dy = self.get_offset()
-        x += dx
-        y += dy
-        x *= self.scale
-        y *= self.scale
+        # world px = (focus point) + delta
+        wx = fx - dx
+        wy = fy - dy
 
-        return int(x), int(y)
+        return wx, wy
+
+    def get_screen_px(self, world_px):
+        x, y = self.get_world_px(self.position)
+        wx, wy = world_px
+
+        # delta = (world pixels of top left) - (world pixel value)
+        dx = x - wx
+        dy = y - wy
+
+        # screen px = delta / scale
+        sx = dx / self.scale
+        sy = dy / self.scale
+
+        return int(sx), int(sy)
 
     def get_offset(self):
+        ox, oy = self.position
+
+        return -ox, -oy
+
+    def draw(self, sub_screen, layers):
+        for layer in layers:
+            layer.draw(sub_screen, self.get_offset())
+
+        if self.visible:
+            for r in self.regions:
+                r.draw(
+                    sub_screen, self.get_offset())
+
+            # pygame.draw.circle(
+            #     screen, self.WINDOW_COLOR,
+            #     (x, y), 1, 1)
+            # self.velocity.draw(
+            #     screen, self.WINDOW_COLOR, (x, y))
+            #
+            # xa, ya = self.anchor
+            # if ya:
+            #     start = x - 100, ya
+            #     end = x + 100, ya
+            #     pygame.draw.line(
+            #         screen, self.WINDOW_COLOR,
+            #         start, end, 5
+            #     )
+            # if xa:
+            #     start = xa, y - 100
+            #     end = xa, y + 100
+            #     pygame.draw.line(
+            #         screen, self.WINDOW_COLOR,
+            #         start, end, 5
+            #     )
+
+    def outside_window(self, window, world_px):
+        world_px = self.get_screen_px(world_px)
+        r = window.get_rect().copy()
+        rx, ry = r.topleft
         x, y = self.position
-        x *= self.scale
-        y *= self.scale
+        x += rx
+        y += ry
 
-        return -x, -y
+        # r.width /= self.scale
+        # r.height /= self.scale
 
-    def draw(self, screen):
-        for w in self.windows:
-            pygame.draw.rect(
-                screen, self.WINDOW_COLOR,
-                w.get_rect(), 1)
-
-        x, y = self.get_screen_position(
-            self.focus_point)
-
-        pygame.draw.circle(
-            screen, self.WINDOW_COLOR,
-            (x, y), 5, 1)
-        self.velocity.draw(
-            screen, self.WINDOW_COLOR, (x, y))
-
-        xa, ya = self.anchor
-        if ya:
-            start = x - 100, ya
-            end = x + 100, ya
-            pygame.draw.line(
-                screen, self.WINDOW_COLOR,
-                start, end, 5
-            )
-        if xa:
-            start = xa, y - 100
-            end = xa, y + 100
-            pygame.draw.line(
-                screen, self.WINDOW_COLOR,
-                start, end, 5
-            )
-
-    def outside_window(self, window, point):
-        point = self.get_screen_position(point)
-        r = window.get_rect()
-
-        if r.collidepoint(point):
-            return False
+        if r.collidepoint(world_px):
+                return False
 
         else:
-            x, y = point
+            wx, wy = world_px
             dx = 0
-            if x > r.right:
-                dx = x - r.right
-            if x < r.left:
-                dx = x - r.left
+            if wx > r.right:
+                dx = wx - r.right
+            if wx < r.left:
+                dx = wx - r.left
 
             dy = 0
-            if y > r.bottom:
-                dy = y - r.bottom
-            if y < r.top:
-                dy = y - r.top
+            if wy > r.bottom:
+                dy = wy - r.bottom
+            if wy < r.top:
+                dy = wy - r.top
 
             return dx, dy
 
-    def move(self, value):
-        dx, dy = value
-        dx /= self.scale
-        dy /= self.scale
-        x, y = self.position
+    def move(self, world_px_distance):
+        # scale screen pixel delta
+        dx, dy = world_px_distance
+        # dx *= self.scale
+        # dy *= self.scale
+
+        # focus point = focus point + delta
+        x, y = self.focus_point
         x += dx
         y += dy
 
-        self.position = round(x), round(y)
+        self.focus_point = x, y
 
-    def track(self, point, rate):
-        x, y = point
-        fx, fy = self.focus_point
-        dx = x - fx
-        dy = y - fy
+    def track(self, world_px, rate, screen_px=None):
+        wx, wy = world_px
+        if not screen_px:
+            fx, fy = self.focus_point
+        else:
+            fx, fy = self.get_world_px(screen_px)
+
+        # delta = world pixel value - focus_point
+        dx = wx - fx
+        dy = wy - fy
+
+        # delta interpolated by rate
         dx *= rate
         dy *= rate
 
-        self.apply_force(
-            self.Vector("tracking", dx, dy))
+        tracking = self.Vector("tracking", dx, dy)
+        # print(tracking)
+        self.apply_force(tracking)
 
     def window_track(self, window, point, rate):
         outside = self.outside_window(window, point)
 
         if outside:
+            fx, fy = self.focus_point
             dx, dy = outside
-            dx *= rate
-            dy *= rate
-            self.apply_force(
-                self.Vector("tracking", dx, dy))
+
+            print(dx, dy)
+            self.track((fx + dx, fy + dy), rate)
 
     def anchor_track(self, point, rate):
         xa, ya = self.anchor
-        sx, sy = self.get_screen_position(point)
-        fx, fy = self.focus_point
+        if not xa:
+            xa = point[1]
+        if not ya:
+            ya = point[2]
 
-        dx, dy = 0, 0
-        if xa and xa != sx:
-            dx = xa - sx
-
-        if ya and ya != sy:
-            dy = ya - sy
-
-        fx -= dx
-        fy -= dy
-        self.track((fx, fy), rate)
-
-    # def apply_velocity(self):
-    #     super(Camera, self).apply_velocity()
-    #     self.velocity.scale(0)
+        self.track(point, rate,
+                   screen_px=(xa, ya))
 
 
 class CameraLayer(Layer):
@@ -280,11 +364,8 @@ class CameraLayer(Layer):
     @staticmethod
     def get_collision_vars(camera, wall):
         angle = wall.get_angle()
-        angles = [(x / 4) + .125 for x in range(4)]
-
         r = camera.rect.copy()
         r.topleft = camera.position
-
         p1, p2 = wall.origin, wall.end_point
 
         return angle, r, p1, p2
@@ -320,9 +401,41 @@ class CameraLayer(Layer):
         # LEFT EDGE v
         if angle == .75:
             if r.left < mid_x and not r.centerx < mid_x:
-                print("left")
                 if not (r.bottom < p1[1] or r.top > p2[1]):
-                    print("collision")
+                    collision = True
+
+        if collision:
+            return wall.axis_collision(
+                camera.collision_point, v)
+
+    @staticmethod
+    def check_edge_collision(camera, wall):
+        angle, r, p1, p2 = CameraLayer.get_collision_vars(
+            camera, wall
+        )
+        v = camera.get_last_velocity()
+        collision = False
+        mid_x = (p1[0] + p2[0]) / 2
+        mid_y = (p1[1] + p2[1]) / 2
+
+        # BOTTOM EDGE >
+        if angle == 0:
+            if r.bottom > mid_y:
+                    collision = True
+
+        # RIGHT EDGE ^
+        if angle == .25:
+            if r.right > mid_x:
+                    collision = True
+
+        # TOP EDGE <
+        if angle == .5:
+            if r.top < mid_y:
+                    collision = True
+
+        # LEFT EDGE v
+        if angle == .75:
+            if r.left < mid_x:
                     collision = True
 
         if collision:
@@ -336,19 +449,15 @@ class CameraLayer(Layer):
         )
 
         if angle == 0:
-            print("BOTTOM")
             r.bottom = p1[1]
 
         if angle == .25:
-            print("RIGHT")
             r.right = p1[0]
 
         if angle == .5:
-            print("TOP")
             r.top = p1[1]
 
         if angle == .75:
-            print("LEFT")
             r.left = p1[0]
 
         camera.focus_point = r.center
@@ -367,12 +476,25 @@ class CameraLayer(Layer):
 
         self.regions.append(region)
 
-    def set_camera_bounds_shape(self, *points, **kwargs):
-        region = Region("camera bounds region", *points, **kwargs)
+    def set_camera_bounds_edge(self, value, angle=0):
+        r = self.camera.rect
+        if angle == 0:
+            start, end = (r.right, value), (r.left, value)
+        elif angle == .25:
+            start, end = (value, r.bottom), (value, r.top)
+        elif angle == .5:
+            start, end = (r.left, value), (r.right, value)
+        elif angle == .75:
+            start, end = (value, r.top), (value, r.bottom)
+        else:
+            raise ValueError("{} not orthogonal angle".format(angle))
+
+        region = Region("camera bounds region",
+                        start, end, closed=False)
 
         self.collision_systems.append(
             region.get_collision_system(
-                [self.camera], self.check_collision,
+                [self.camera], self.check_edge_collision,
                 self.handle_collision)
         )
 
@@ -440,72 +562,69 @@ class CameraLayer(Layer):
 
         self.track_functions.append(set_heading)
 
-    def add_bg_layer(self, bg_image, scale, **kwargs):
-        l = ParallaxBgLayer(
-            bg_image, scale, self.camera,
-            **kwargs)
-        self.bg_layers.append(l)
-
-        return l
+    def add_bg_layer(self, layer):
+        self.bg_layers.append(layer)
 
     def draw(self, screen, offset=(0, 0)):
+        sub_rect = self.rect.clip(screen.get_rect())
+
+        try:
+            canvas = screen.subsurface(sub_rect)
+        except ValueError:      # if the layer's area is entirely outside of the screen's
+            return              # area, it doesn't get drawn
+
+        canvas.fill((0, 0, 0))
+
         if self.camera.scale > 1:
             w, h = self.size
-            w /= 2
-            h /= 2
+            w /= self.camera.scale
+            h /= self.camera.scale
             sub_screen = pygame.Surface((w, h))
 
             self.draw_bg_layers(sub_screen)
-            super(CameraLayer, self).draw(
-                sub_screen, self.camera.get_offset())
+            self.camera.draw(
+                sub_screen, self.sub_layers)
 
-            pygame.transform.smoothscale(sub_screen, self.size, screen)
+            sx, sy = self.size
+            pygame.transform.scale(
+                sub_screen, (int(sx), int(sy)),
+                canvas)
 
         else:
-            self.draw_bg_layers(screen)
-
-            super(CameraLayer, self).draw(
-                screen, self.camera.get_offset())
-
-        if self.camera.visible:
-            self.camera.draw(screen)
-
-            for region in self.regions:
-                region.draw(
-                    screen, offset=self.camera.get_offset())
+            self.draw_bg_layers(canvas)
+            self.camera.draw(
+                canvas, self.sub_layers)
 
     def draw_bg_layers(self, screen):
         for layer in self.bg_layers:
-            layer.draw(screen, self.camera.get_offset())
+            layer.draw(
+                screen, self.camera.get_offset())
 
 
 class ParallaxBgLayer(Layer):
-    def __init__(self, image_name, scale, camera, buffer=(0, 0),
-                 wrap=(False, False), **kwargs):
+    def __init__(self, image, scale, buffer=(0, 0), wrap=(False, False), **kwargs):
         super(ParallaxBgLayer, self).__init__("bg layer", **kwargs)
 
-        self.set_up_graphics(image_name, buffer)
+        self.set_up_graphics(image, buffer)
 
-        self.camera = camera
         self.scale = scale
         self.wrap = wrap
 
-    def set_up_graphics(self, image_name, buffer):
-        bg_image = self.get_bg_image(image_name)
-        self.graphics = IconGraphics(self, bg_image)
+    def set_up_graphics(self, image, buffer):
+        self.graphics = IconGraphics(self, image)
 
-        w, h = bg_image.get_size()
+        w, h = image.get_size()
         w += buffer[0]
         h += buffer[1]
         self.size = w, h
 
     @staticmethod
     def get_bg_image(image_name):
-        path = join(BG_LAYERS, image_name + ".gif")
-        bg_image = pygame.image.load(path)
-        bg_image.set_colorkey(bg_image.get_at((0, 0)))
+        path = join(BG_LAYERS, image_name)
+        image = pygame.image.load(path)
+        image.set_colorkey(image.get_at((0, 0)))
 
-        return bg_image
+        return image
 
     def draw(self, screen, offset=(0, 0)):
         sw, sh = screen.get_size()
@@ -531,7 +650,8 @@ class ParallaxBgLayer(Layer):
 
                 for j in range((sh // h) + 2):
                     oy = y + ((j - 1) * h)
-                    self.graphics.draw(screen, offset=(ox, oy))
+                    self.graphics.draw(
+                        screen, offset=(ox, oy))
 
         elif x_wrap:
             for i in range((sw // w) + 2):
@@ -543,7 +663,9 @@ class ParallaxBgLayer(Layer):
         elif y_wrap:
             for j in range((sh // h) + 2):
                 oy = y + ((j - 1) * h)
-                self.graphics.draw(screen, offset=(x, oy))
+                self.graphics.draw(
+                    screen, offset=(x, oy))
 
         else:
-            self.graphics.draw(screen, offset=(x, y))
+            self.graphics.draw(
+                screen, offset=(x, y))

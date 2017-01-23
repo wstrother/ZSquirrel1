@@ -24,11 +24,7 @@ class AnimationGraphics(Graphics):
     def get_hitbox(self):
         animation = self.get_image_set()
         if animation:
-            w, h, x, y = animation.hitbox
-
-            return pygame.Rect((x, y), (w, h))
-        else:
-            return self.entity.rect
+            return animation.hitbox
 
     def get_frame_count(self):
         if self.get_image_set():
@@ -159,7 +155,7 @@ class Animation(ImageSet):
         cw, ch = sprite_sheet.get_size()
 
         for frame in self._stream[1:]:
-            print(frame)
+            # print(frame)
             x, y = frame[0]
             x *= w
             y *= h
@@ -167,7 +163,6 @@ class Animation(ImageSet):
             px, py = x + (sx * w), y + (sy * h)
             if mirror:
                 px = (cw - w) - px
-                # py = (ch - h) - py
             position = px, py
 
             r = pygame.Rect(position, cell_size)
