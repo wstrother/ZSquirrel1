@@ -4,10 +4,28 @@ import pygame
 from pygame import draw
 
 
-class Vector:
+class GroupsInterface:
+    def __init__(self):
+        self.groups = []
+
+    def add(self, *groups):
+        for group in groups:
+            group.add(self)
+
+    def remove(self, *groups):
+        for group in groups:
+            group.remove(self)
+
+    def kill(self):
+        for g in self.groups:
+            self.remove(g)
+
+
+class Vector(GroupsInterface):
     DRAW_WIDTH = 5
 
     def __init__(self, name, i_hat, j_hat):
+        super(Vector, self).__init__()
         self.name = name
         self.i_hat = i_hat
         self.j_hat = j_hat
@@ -459,14 +477,15 @@ class Wall(Vector):
             normal.draw(screen, color, offset=start_n)
 
 
-class Region:
+class Region(GroupsInterface):
     WALL_COLOR = 255, 0, 255
 
-    def __init__(self, name, *points, **kwargs):
+    def __init__(self, name, *points, position=(0, 0), **kwargs):
+        super(Region, self).__init__()
         self.name = name
-        # super(Region, self).__init__()
 
         self.walls = []
+        self.position = position
         if points:
             self.set_walls(points, **kwargs)
 
@@ -553,11 +572,20 @@ class RectRegion(Region):
         points = (self.bottomleft, self.topleft,
                   self.topright, self.bottomright)
 
-        super(RectRegion, self).__init__(name, *points, **kwargs)
+        super(RectRegion, self).__init__(
+            name, *points, position=position,
+            **kwargs
+        )
+
+    def __repr__(self):
+        return "{}: {}, {}".format(self.name, self.size, self.position)
 
     def draw(self, screen, offset=(0, 0)):
         r = self.pygame_rect
         color = self.WALL_COLOR
+
+        r.x += offset[0]
+        r.y += offset[1]
 
         pygame.draw.rect(
             screen, color,

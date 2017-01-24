@@ -287,6 +287,10 @@ class PhysicsInterface:
 
         if self.graphics:
             w, h, x, y = self.graphics.get_hitbox()
+            px, py = self.position
+            x += px
+            y += py
+
             r.size = (w, h)
             r.position = (x, y)
 

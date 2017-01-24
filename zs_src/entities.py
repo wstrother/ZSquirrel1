@@ -4,7 +4,7 @@ from types import MethodType
 from zs_constants.zs import SCREEN_SIZE, TRANSITION_TIME
 from zs_src.classes import StateMeter
 from zs_src.events import ZsEventInterface
-from zs_src.regions import RectRegion
+from zs_src.regions import RectRegion, GroupsInterface
 
 
 class Model(ZsEventInterface):
@@ -512,7 +512,7 @@ class Layer(ZsEntity):
                     screen.blit(sprite.image, (x, y))
 
             if hasattr(sprite, "draw"):
-                sprite.draw(screen, (x, y))
+                sprite.draw(screen, offset)
 
     # the main() method is called by the Game object's main() method
     # each iteration of the loop (i.e. once per frame) if it is assigned
@@ -590,23 +590,6 @@ class SpawnMetaclass(type):
             raise AttributeError("class does not have 'on_spawn' method")
 
         return n
-
-
-class GroupsInterface:
-    def __init__(self):
-        self.groups = []
-
-    def add(self, *groups):
-        for group in groups:
-            group.add(self)
-
-    def remove(self, *groups):
-        for group in groups:
-            group.remove(self)
-
-    def kill(self):
-        for g in self.groups:
-            self.remove(g)
 
 
 class ZsSprite(GroupsInterface, ZsEntity, metaclass=SpawnMetaclass):

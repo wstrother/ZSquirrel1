@@ -15,15 +15,19 @@ class Camera(PhysicsInterface):
 
     class Window(RectRegion):
         def __init__(self, camera, window_size, shift, offset):
-            x, y = camera.size
+            x, y = camera.screen_size
             x /= 2
             y /= 2
             x += offset[0]
             y += offset[1]
 
             self.camera = camera
-            self._size = window_size
-            self._position = (0, 0)
+            w, h = window_size
+            w /= camera.scale
+            h /= camera.scale
+
+            self._size = w, h
+            self._position = 0, 0
             self.offsets = self.get_offset_meters(
                 (x, y), shift
             )
@@ -48,8 +52,8 @@ class Camera(PhysicsInterface):
         def position(self):
             x, y = self.camera.position
             ox, oy = self.offsets
-            x += ox.value
-            y += oy.value
+            x += ox.value / self.camera.scale
+            y += oy.value / self.camera.scale
             self.center = x, y
 
             return self._position
@@ -84,6 +88,9 @@ class Camera(PhysicsInterface):
         def draw(self, screen, offset=(0, 0)):
             color = Camera.WINDOW_COLOR
             r = self.pygame_rect
+            r.x += offset[0]
+            r.y += offset[1]
+
             pygame.draw.rect(
                 screen, color,
                 r, 1
@@ -96,8 +103,8 @@ class Camera(PhysicsInterface):
     def __init__(self, size, scale=1):
         super(Camera, self).__init__(1, 0)
         self._focus_point = size[0] / 2, size[1] / 2
-        self.size = size
         self._scale = scale
+        self.screen_size = size
 
         self.visible = True
         self.anchor = (0, 0)
@@ -141,12 +148,8 @@ class Camera(PhysicsInterface):
         return w
 
     @property
-    def collision_region(self):
-        r = self.rect.copy()
-        r.width /= self.scale
-        r.height /= self.scale
-
-        return self.rect
+    def size(self):
+        return self.collision_region.size
 
     @property
     def position(self):
@@ -154,8 +157,10 @@ class Camera(PhysicsInterface):
 
     @property
     def reticle(self):
-        w, h = self.size
-        return w / 2, h / 2
+        w, h = self.screen_size
+        sx, sy = w / 2, h / 2
+
+        return sx, sy
 
     def get_world_px(self, screen_px):
         sx, sy = screen_px
@@ -165,6 +170,10 @@ class Camera(PhysicsInterface):
         rx, ry = self.reticle
         dx = rx - sx
         dy = ry - sy
+
+        # convert screen px delta to world px delta
+        dx /= self.scale
+        dy /= self.scale
 
         # world px = (focus point) + delta
         wx = fx - dx
@@ -197,30 +206,7 @@ class Camera(PhysicsInterface):
 
         if self.visible:
             for r in self.regions:
-                r.draw(
-                    sub_screen, self.get_offset())
-
-            # pygame.draw.circle(
-            #     screen, self.WINDOW_COLOR,
-            #     (x, y), 1, 1)
-            # self.velocity.draw(
-            #     screen, self.WINDOW_COLOR, (x, y))
-            #
-            # xa, ya = self.anchor
-            # if ya:
-            #     start = x - 100, ya
-            #     end = x + 100, ya
-            #     pygame.draw.line(
-            #         screen, self.WINDOW_COLOR,
-            #         start, end, 5
-            #     )
-            # if xa:
-            #     start = xa, y - 100
-            #     end = xa, y + 100
-            #     pygame.draw.line(
-            #         screen, self.WINDOW_COLOR,
-            #         start, end, 5
-            #     )
+                r.draw(sub_screen, self.get_offset())
 
     def outside_window(self, window, world_px):
         world_px = self.get_screen_px(world_px)
@@ -267,10 +253,14 @@ class Camera(PhysicsInterface):
 
     def track(self, world_px, rate, screen_px=None):
         wx, wy = world_px
+        # print(wx, wy)
+
         if not screen_px:
             fx, fy = self.focus_point
         else:
             fx, fy = self.get_world_px(screen_px)
+
+        # print(fx, fy)
 
         # delta = world pixel value - focus_point
         dx = wx - fx

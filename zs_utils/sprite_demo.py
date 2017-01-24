@@ -167,7 +167,25 @@ class SpriteDemoContext(ContextManager):
         return commands
 
     def set_up_huds(self, layer, *args):
-        super(SpriteDemoContext, self).set_up_huds(layer, *args)
+        player = self.get_value("player")
+
+        player_huds = [
+            ("Acceleration",
+             lambda: player.acceleration.get_value(),
+             "average", 2),
+            ("Velocity",
+             lambda: player.velocity.get_value(),
+             "average", 2),
+            ("Position",
+             lambda: player.position),
+            ("Grounded",
+             lambda: player.is_grounded())
+        ]
+        d = {
+            "Player": player_huds
+        }
+
+        super(SpriteDemoContext, self).set_up_huds(layer, d)
 
     def set_up_camera(self, layer, *args):
         # super(SpriteDemoContext, self).set_up_camera(*args)
@@ -244,7 +262,6 @@ class SpriteDemoContext(ContextManager):
 
 class SpriteDemo(ContextLayer):
     def __init__(self, **kwargs):
-        self.main_group = self.make_group()
         super(SpriteDemo, self).__init__(
             "Sprite Demo", SpriteDemoContext, **kwargs)
 

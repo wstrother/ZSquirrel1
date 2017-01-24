@@ -77,7 +77,10 @@ class ContextManager:
 
     def set_up_huds(self, *args):
         layer = args[0]
-        huds = args[1:]
+        huds = args[1]
+
+        for name in huds:
+            layer.add_hud_box(name, huds[name])
 
     def set_up_camera(self, *args):
         layer = args[0]

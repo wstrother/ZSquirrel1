@@ -716,6 +716,23 @@ class DebugLayer(HeadsUpDisplay):
             "Toggle debug layer": toggle_visible,
         }
 
+        w, h = SCREEN_SIZE
+        w -= 50
+
+        if (w / h) > (4 / 3):
+            cutoff = 4
+        else:
+            cutoff = 3
+
+        block = self.tools.ContainerSprite(
+            "physics reporter box",
+            size=(w, 0), table_style="cutoff {}".format(cutoff),
+            position=(25, 0)
+        )
+        block.add(self.hud_group)
+        block.visible = False
+        self.hud_table = block
+
     @staticmethod
     def get_frame_rate_hud(dt):
         rates = AverageCache(int(FRAME_RATE * dt))
@@ -791,34 +808,10 @@ class DebugLayer(HeadsUpDisplay):
 
         return get_text
 
-    def populate(self):
-        tools = self.tools
-        w, h = SCREEN_SIZE
-        w -= 50
-
-        if (w / h) > (4 / 3):
-            cutoff = 4
-        else:
-            cutoff = 3
-
-        player = self.get_value("player")
-        camera = self.get_value("camera")
-        reporters = [
-            # HudBox(camera, "Camera", self.get_physics_interface_hud()),
-            # HudBox(player.animation_machine, "Animation State",
-            #        self.get_animation_machine_hud(.5)),
-            HudBox(self.model.values, "Frame Rate",
-                   self.get_frame_rate_hud(1)),
-            # HudBox(self.environment.camera_layer, "Camera", self.get_camera_hud())
-        ]
-
-        block = tools.ContainerSprite(
-            "physics reporter box", reporters,
-            size=(w, 0), table_style="cutoff {}".format(cutoff),
-            position=(25, 0)
+    def add_hud_box(self, name, huds, interval=5):
+        self.hud_table.add_member_sprite(
+            HudBox(name, huds, interval)
         )
-        block.add(self.hud_group)
-        block.visible = False
 
     def update(self, dt):
         self.model.set_value("dt", dt)
@@ -826,45 +819,116 @@ class DebugLayer(HeadsUpDisplay):
 
 
 class HudBox(ContainerSprite):
-    def __init__(self, obj, name, func, frequency=None, **kwargs):
-        body = TextSprite("")
+    def __init__(self, name, huds, interval=5, **kwargs):
+        kwargs.update({"align_h": "c"})
         super(HudBox, self).__init__(
-            name + " HUD", [body],
-            title=name, **kwargs)
+            name + " HUD", title=name,
+            **kwargs)
 
-        self.body = body
-        self.obj = obj
-        self.func = func
-        self.value = None
+        self.interval = interval
+        self.set_up_huds(huds)
 
-        if not frequency:
-            frequency = int(FRAME_RATE / 5)
+    def set_up_huds(self, huds):
+        # hud: (value_name, [average/changes], dt, maximum
+
+        for hud in huds:
+            self.add_text_field(hud)
+
+    def add_text_field(self, hud):
+        text_field = HudTextSprite(hud)
         self.add_timer(
-            "HUD update frequency", frequency,
-            temp=False, on_switch_off=self.set_text)
-        self.style = {"align_h": "c"}
-        # self.visible = False
+            "HUD update frequency", self.interval,
+            on_switch_off=text_field.set_text,
+            temp=False)
 
-    def set_text(self):
-        self.body.change_text(self.value)
+        self.add_member_sprite(text_field)
+
+
+class HudTextSprite(TextSprite):
+    L_STR = "{:>20}: {:^20}"
+    T_STR = "({:3.1f}, {:3.1f})"
+    F_STR = "{:3.1f}"
+
+    def __init__(self, hud, **kwargs):
+        super(HudTextSprite, self).__init__("", **kwargs)
+
+        self.cache = None
+        self.func = self.get_func(hud)
+
+    def get_func(self, hud):
+        value_name = hud[0]
+        func = hud[1]
+        lhs = value_name
+
+        print(value_name)
+        if len(hud) == 2:
+            def get_text():
+                value = func()
+
+                return self.get_f_text(
+                    lhs, value)
+
+        else:
+            if hud[2] == "average":
+                self.cache = AverageCache(hud[3])
+
+                def get_text():
+                    value = func()
+                    self.cache.append(value)
+
+                    return self.get_f_text(
+                        lhs, self.cache[-1])
+
+            # if hud[2] == "changes":
+            else:
+                self.cache = ChangeCache(hud[3])
+
+                def get_text():
+                    value = func()
+                    self.cache.append(value)
+
+                    return self.cache.changes(hud[4])
+
+        return get_text
 
     def update(self, dt):
-        super(HudBox, self).update(dt)
+        super(HudTextSprite, self).update(dt)
 
-        self.value = self.func(self.obj)
+    def set_text(self):
+        self.change_text(self.func())
 
+    def get_f_text(self, lhs, value):
+        print(lhs)
+        if type(value) is tuple:
+            rhs = self.T_STR.format(*value)
 
-class HudBoxValue(HudBox):
-    pass
+        elif type(value) is float:
+            rhs = self.F_STR.format(value)
+
+        else:
+            rhs = str(value)
+
+        return self.L_STR.format(
+            lhs, rhs)
 
 
 class AverageCache(CacheList):
     def average(self):
-        return sum(self) / len(self)
+        if not self:
+            return []
+
+        if type(self[0]) in (int, float):
+            return sum(self) / len(self)
+
+        else:
+            lhs = [i[0] for i in self]
+            rhs = [i[1] for i in self]
+
+            return (sum(lhs) / len(lhs)), (sum(rhs) / len(rhs))
 
 
 class ChangeCache(CacheList):
-    def changes(self):
+    def changes(self, maximum):
         changes = []
         last = None
         for item in self:
@@ -872,4 +936,8 @@ class ChangeCache(CacheList):
                 last = item
                 changes.append(item)
 
-        return changes
+        if len(self) > maximum:
+            return changes[-maximum:]
+
+        else:
+            return changes
