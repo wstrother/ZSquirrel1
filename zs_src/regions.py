@@ -22,10 +22,13 @@ class GroupsInterface:
 
 
 class Vector(GroupsInterface):
+    VECTOR_COLOR = 255, 255, 255
     DRAW_WIDTH = 5
 
     def __init__(self, name, i_hat, j_hat):
         super(Vector, self).__init__()
+        self.origin = 0, 0
+
         self.name = name
         self.i_hat = i_hat
         self.j_hat = j_hat
@@ -37,6 +40,10 @@ class Vector(GroupsInterface):
         s = "{}: {}, {} angle: {}".format(self.name, i, j, a)
 
         return s
+
+    @property
+    def position(self):
+        return self.origin
 
     def round(self):
         if abs(self.i_hat) < .00001:
@@ -265,7 +272,10 @@ class Vector(GroupsInterface):
 
         return -1 * y0
 
-    def draw(self, screen, color, offset=(0, 0)):
+    def draw(self, screen, offset=(0, 0), color=None):
+        if not color:
+            color = self.VECTOR_COLOR
+
         x, y = offset
         dx, dy = self.get_value()
         dx += x
@@ -451,13 +461,14 @@ class Wall(Vector):
         if wall.ground:
             sprite.set_on_ground(wall)
 
-    def draw(self, screen, color, offset=(0, 0)):
+    def draw(self, screen, offset=(0, 0), color=None):
         x, y = self.origin
         x += offset[0]
         y += offset[1]
 
         super(Wall, self).draw(
-            screen, color, offset=(x, y))
+            screen, color=color,
+            offset=(x, y))
 
         start = self.origin
 
@@ -474,7 +485,7 @@ class Wall(Vector):
 
             start_n = xn + offset[0], yn + offset[1]
             normal = self.normal.get_copy(scale=self.NORMAL_DRAW_SCALE)
-            normal.draw(screen, color, offset=start_n)
+            normal.draw(screen, offset=start_n, color=color)
 
 
 class Region(GroupsInterface):
@@ -529,7 +540,8 @@ class Region(GroupsInterface):
 
     def draw(self, screen, offset=(0, 0)):
         for wall in self.walls:
-            wall.draw(screen, self.WALL_COLOR, offset=offset)
+            wall.draw(screen, offset=offset,
+                      color=self.WALL_COLOR)
 
     def update(self, dt):
         pass
@@ -635,17 +647,37 @@ class RectRegion(Region):
     def right(self):
         return self.position[0] + self.width
 
+    @right.setter
+    def right(self, value):
+        dx = value - self.right
+        self.move((dx, 0))
+
     @property
     def left(self):
         return self.position[0]
+
+    @left.setter
+    def left(self, value):
+        dx = value - self.left
+        self.move((dx, 0))
 
     @property
     def top(self):
         return self.position[1]
 
+    @top.setter
+    def top(self, value):
+        dy = value - self.top
+        self.move((0, dy))
+
     @property
     def bottom(self):
         return self.top + self.height
+
+    @bottom.setter
+    def bottom(self, value):
+        dy = value - self.bottom
+        self.move((0, dy))
 
     @property
     def midleft(self):
@@ -681,7 +713,7 @@ class RectRegion(Region):
 
     @property
     def center(self):
-        return (self.right + (self.width / 2),
+        return (self.left + (self.width / 2),
                 self.top + (self.height / 2))
 
     @center.setter

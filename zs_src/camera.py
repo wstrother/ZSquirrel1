@@ -7,7 +7,7 @@ from zs_src.classes import Meter
 from zs_src.entities import Layer
 from zs_src.graphics import IconGraphics
 from zs_src.physics import PhysicsInterface
-from zs_src.regions import Region, RectRegion
+from zs_src.regions import Vector, Wall, RectRegion
 
 
 class Camera(PhysicsInterface):
@@ -106,8 +106,10 @@ class Camera(PhysicsInterface):
         self._scale = scale
         self.screen_size = size
 
-        self.visible = True
+        self.visible = False
         self.anchor = (0, 0)
+        self.x_anchor = Vector("x anchor", 0, size[1] / 4)
+        self.y_anchor = Vector("y anchor", size[0] / 4, 0)
 
         self.regions = [Camera.Window(
                 self, size,
@@ -142,7 +144,7 @@ class Camera(PhysicsInterface):
                     shift=(0, 0), offset=(0, 0)):
 
         w = self.Window(
-            self.size, window_size, shift, offset
+            self, window_size, shift, offset
         )
         self.regions.append(w)
         return w
@@ -182,7 +184,7 @@ class Camera(PhysicsInterface):
         return wx, wy
 
     def get_screen_px(self, world_px):
-        x, y = self.get_world_px(self.position)
+        x, y = self.position
         wx, wy = world_px
 
         # delta = (world pixels of top left) - (world pixel value)
@@ -208,16 +210,24 @@ class Camera(PhysicsInterface):
             for r in self.regions:
                 r.draw(sub_screen, self.get_offset())
 
+            xa, ya = self.anchor
+            rx, ry = self.reticle
+            if xa:
+                self.x_anchor.draw(
+                    sub_screen, (xa, ry),
+                    self.WINDOW_COLOR)
+
+            if ya:
+                self.y_anchor.draw(
+                    sub_screen, (rx, ya),
+                    self.WINDOW_COLOR)
+
     def outside_window(self, window, world_px):
-        world_px = self.get_screen_px(world_px)
-        r = window.get_rect().copy()
+        r = window.pygame_rect
         rx, ry = r.topleft
         x, y = self.position
         x += rx
         y += ry
-
-        # r.width /= self.scale
-        # r.height /= self.scale
 
         if r.collidepoint(world_px):
                 return False
@@ -253,14 +263,11 @@ class Camera(PhysicsInterface):
 
     def track(self, world_px, rate, screen_px=None):
         wx, wy = world_px
-        # print(wx, wy)
 
         if not screen_px:
             fx, fy = self.focus_point
         else:
             fx, fy = self.get_world_px(screen_px)
-
-        # print(fx, fy)
 
         # delta = world pixel value - focus_point
         dx = wx - fx
@@ -271,28 +278,35 @@ class Camera(PhysicsInterface):
         dy *= rate
 
         tracking = self.Vector("tracking", dx, dy)
-        # print(tracking)
         self.apply_force(tracking)
 
-    def window_track(self, window, point, rate):
-        outside = self.outside_window(window, point)
+    def window_track(self, window, world_px, rate):
+        outside = self.outside_window(window, world_px)
 
         if outside:
             fx, fy = self.focus_point
             dx, dy = outside
-
-            print(dx, dy)
             self.track((fx + dx, fy + dy), rate)
 
-    def anchor_track(self, point, rate):
+    def anchor_track(self, world_px, rate):
+        wx, wy = world_px
         xa, ya = self.anchor
-        if not xa:
-            xa = point[1]
-        if not ya:
-            ya = point[2]
+        rx, ry = self.reticle
+        fx, fy = self.focus_point
 
-        self.track(point, rate,
-                   screen_px=(xa, ya))
+        sx, sy = xa, ya
+
+        # X ANCHOR
+        if xa:
+            sy = ry
+            wy = fy
+
+        if ya:
+            sx = rx
+            wx = fx
+
+        self.track((wx, wy), rate,
+                   screen_px=(sx, sy))
 
 
 class CameraLayer(Layer):
@@ -312,6 +326,7 @@ class CameraLayer(Layer):
 
         self.interface = {
             "Toggle window visibility": toggle_visible,
+            "Toggle visibility": lambda: self.set_visible(not self.visible)
         }
         # self._positions = CacheList(2)
         # self._positions.append((0, 0))
@@ -341,21 +356,20 @@ class CameraLayer(Layer):
         super(CameraLayer, self).update(dt)
 
         self.camera.apply_acceleration()
-        self.camera.apply_velocity()
-
         for func in self.track_functions:
             func()
 
         for system in self.collision_systems:
             system()
 
+        self.camera.velocity.round()
+        self.camera.apply_velocity()
         self.camera.velocity.scale(0)
 
     @staticmethod
     def get_collision_vars(camera, wall):
         angle = wall.get_angle()
-        r = camera.rect.copy()
-        r.topleft = camera.position
+        r = camera.collision_region
         p1, p2 = wall.origin, wall.end_point
 
         return angle, r, p1, p2
@@ -365,7 +379,12 @@ class CameraLayer(Layer):
         angle, r, p1, p2 = CameraLayer.get_collision_vars(
             camera, wall
         )
-        v = camera.get_last_velocity()
+        r = r.pygame_rect
+        v = camera.velocity
+        vx, vy = v.get_value()
+        r.x += vx
+        r.y += vy
+
         collision = False
         mid_x = (p1[0] + p2[0]) / 2
         mid_y = (p1[1] + p2[1]) / 2
@@ -403,7 +422,13 @@ class CameraLayer(Layer):
         angle, r, p1, p2 = CameraLayer.get_collision_vars(
             camera, wall
         )
-        v = camera.get_last_velocity()
+        v = camera.velocity
+        vx, vy = v.get_value()
+
+        r = r.pygame_rect
+        r.x += vx
+        r.y += vy
+
         collision = False
         mid_x = (p1[0] + p2[0]) / 2
         mid_y = (p1[1] + p2[1]) / 2
@@ -437,6 +462,7 @@ class CameraLayer(Layer):
         angle, r, p1, p2 = CameraLayer.get_collision_vars(
             camera, wall
         )
+        r = r.pygame_rect
 
         if angle == 0:
             r.bottom = p1[1]
@@ -452,10 +478,16 @@ class CameraLayer(Layer):
 
         camera.focus_point = r.center
 
+        if angle == 0 or angle == .5:
+            camera.velocity.j_hat = 0
+
+        if angle == .25 or angle == .75:
+            camera.velocity.i_hat = 0
+
     def set_camera_bounds_region(self, size, position=(0, 0),
                                  orientation=False, **kwargs):
         region = RectRegion(
-            "camera bounds", pygame.Rect(position, size),
+            "camera bounds", size, position,
             orientation=orientation, **kwargs)
 
         self.collision_systems.append(
@@ -467,28 +499,28 @@ class CameraLayer(Layer):
         self.regions.append(region)
 
     def set_camera_bounds_edge(self, value, angle=0):
-        r = self.camera.rect
+        w, h = self.camera.screen_size
         if angle == 0:
-            start, end = (r.right, value), (r.left, value)
+            start, end = (0, value), (w, value)
         elif angle == .25:
-            start, end = (value, r.bottom), (value, r.top)
+            start, end = (value, h), (value, 0)
         elif angle == .5:
-            start, end = (r.left, value), (r.right, value)
+            start, end = (w, value), (0, value)
         elif angle == .75:
-            start, end = (value, r.top), (value, r.bottom)
+            start, end = (value, 0), (value, h)
         else:
             raise ValueError("{} not orthogonal angle".format(angle))
 
-        region = Region("camera bounds region",
-                        start, end, closed=False)
+        wall = Wall(start, end)
+
+        def collision_system():
+            if self.check_edge_collision(self.camera, wall):
+                self.handle_collision(self.camera, wall)
 
         self.collision_systems.append(
-            region.get_collision_system(
-                [self.camera], self.check_edge_collision,
-                self.handle_collision)
-        )
+            collision_system)
 
-        self.regions.append(region)
+        self.regions.append(wall)
 
     def set_tracking_point_function(self, get_point, rate):
         def set_camera():
@@ -533,12 +565,12 @@ class CameraLayer(Layer):
 
         def set_heading():
             velocity = sprite.velocity.get_value()
-            direction = sprite.direction
+            # direction = sprite.direction
             vx, vy = velocity
-            dx, dy = direction
+            # dx, dy = direction
 
-            left = vx < 0 and dx < 0
-            right = vx > 0 and dx > 0
+            left = vx < 1
+            right = vx > 1
             up = vx < -1
             down = vx > 1
 
@@ -551,6 +583,15 @@ class CameraLayer(Layer):
             window.shift((x, y))
 
         self.track_functions.append(set_heading)
+
+    def set_scale_tracking_function(self, get_scale, span):
+        meter = Meter("span", span[0], span[1], span[0])
+
+        def set_scale():
+            meter.value = get_scale()
+            self.camera.scale = meter.value
+
+        self.track_functions.append(set_scale)
 
     def add_bg_layer(self, layer):
         self.bg_layers.append(layer)

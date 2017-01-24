@@ -114,6 +114,12 @@ class ContextManager:
                 env.add_sub_layer(
                     layer)
 
+        if ld.get("hitbox_layer"):
+            layer.add_hitbox_layer(ld.get("hitbox_layer"))
+
+        if ld.get("vector_layer"):
+            layer.add_vector_layer(ld.get("vector_layer"))
+
         if ld.get("groups"):
             layer.groups = list(ld.get("groups"))
 

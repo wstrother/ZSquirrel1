@@ -68,7 +68,6 @@ class CharacterSprite(PhysicsInterface, AnimationSprite):
         PhysicsInterface.__init__(self, mass, elasticity)
 
         self.controller = None
-        self.direction = RIGHT
         self.adjust_position(self.rect.topleft)
 
         self.meters = {}

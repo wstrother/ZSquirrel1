@@ -26,9 +26,9 @@ class SpriteDemoContext(ContextManager):
         bg_layers = []
         for tree in trees:
             scale = get_scale(tree + ".gif")
-            offset = 200
+            offset = 150
             depth = 70
-            position = 0, (depth * scale) + offset
+            position = 0, ((depth * scale) + offset) - (110 * scale)
 
             bg_layers.append(ParallaxBgLayer(
                 get(tree + ".gif"), scale,
@@ -111,10 +111,9 @@ class SpriteDemoContext(ContextManager):
                  Wall((2490, 90), (2790, -180), True),
                  Wall((2200, -120), (2500, -220), True),
                  Wall((2500, -220), (2200, -120)),
-                 Wall((0, 720), (1999, 720), True)]
+                 Wall((0, 620), (2499, 620), True)]
         # walls = [
-        #     Wall((0, 900), (2500, 200), True),
-        #     Wall((50, 0), (500, 0), True)
+        #     Wall((0, 300), (6500, 0), True),
         # ]
         region = Region("Level Walls")
         region.walls = walls
@@ -193,71 +192,56 @@ class SpriteDemoContext(ContextManager):
 
         player = self.get_value("player")
 
-        # w1 = ("slow_push", [(450, 350), (300, 150), (0, 75)])
-        # w2 = ("fast_push", [(550, 500), (350, 0)])
-        #
-        # # BUILD CAMERA WINDOWS
-        # camera_layer.set_up_windows(w1, w2)
+        w1 = ("slow_push", [(450, 350), (300, 150), (0, 75)])
+        w2 = ("fast_push", [(550, 500), (350, 0)])
+
+        # BUILD CAMERA WINDOWS
+        camera_layer.set_up_windows(w1, w2)
 
         # TRACK CAMERA FUNCTION
-        camera_layer.set_tracking_point_function(
-            lambda: player.collision_point, 1/4
-        )
-        #
-        # camera_layer.set_sprite_window_track(
-        #     player, "slow_push", .08)
-        # camera_layer.set_sprite_window_track(
-        #     player, "fast_push", .5)
-        # camera_layer.track_window_to_sprite_heading(
-        #     player, "slow_push", 1.5)
-        # camera_layer.track_window_to_sprite_heading(
-        #     player, "fast_push", .5)
+        camera_layer.set_sprite_window_track(
+            player, "slow_push", .08)
+        camera_layer.set_sprite_window_track(
+            player, "fast_push", .5)
+        camera_layer.track_window_to_sprite_heading(
+            player, "slow_push", 1.5)
+        camera_layer.track_window_to_sprite_heading(
+            player, "fast_push", .5)
 
         # TRACK ANCHOR FUNCTION
-        # camera_layer.set_anchor_track_function(
-        #     lambda: player.get_ground_anchor(),
-        #     lambda: player.is_grounded(), .05
-        # )
-        #
-        # a_min = 450
-        # a_max = 550
-        #
-        # def get_position():
-        #     span = a_max - a_min
-        #     x, y = camera_layer.camera.position
-        #     r = y / SCREEN_SIZE[1]
-        #     value = r * span
-        #
-        #     return value + 450
-        #
-        # camera_layer.set_anchor_position_function(
-        #     get_position, (a_min, a_max)
-        # )
+        camera_layer.set_anchor_track_function(
+            lambda: player.get_ground_anchor(),
+            lambda: player.is_grounded(), .05
+        )
 
-        # SET CAMERA BOUNDS
+        camera_layer.set_anchor(450)
+        a_min = 450
+        a_max = 550
 
-        # SET CAMERA SCALE
-        # def get_scale(p):
-        #     x, y = p.position
-        #     disp = x / 2500
-        #
-        #     return 1 + ((1 - disp) * 2)
-        #
-        # self.model.link_object(
-        #     player, "camera_scale", get_scale
-        # )
-        #
-        # def set_scale(value):
-        #     if value < 1.5:
-        #         value = 1.5
-        #     if value > 2.5:
-        #         value = 2
-        #     self.camera_layer.camera.scale = value
+        def get_position():
+            span = a_max - a_min
+            x, y = camera_layer.camera.position
+            r = y / 600
+            value = r * span
 
-        # self.model.link_value(
-        #     "camera_scale", set_scale
-        # )
-        # self.set_value("camera_scale", get_scale(player))
+            return value + 450
+
+        camera_layer.set_anchor_position_function(
+            get_position, (a_min, a_max)
+        )
+
+        camera_layer.set_camera_bounds_edge(900)
+
+        def get_scale():
+            camera = camera_layer.camera
+            y = camera.focus_point[1]
+            scale = 1 + (((y + 1200) / 2700) * 2)
+
+            return scale
+
+        camera_layer.set_scale_tracking_function(
+            get_scale, (1, 2)
+        )
 
 
 class SpriteDemo(ContextLayer):
@@ -414,8 +398,8 @@ class DemoSprite(CharacterSprite):
     def update(self, dt):
         super(DemoSprite, self).update(dt)
 
-        base_jump = 5
-        base_speed = 5
+        base_jump = 3.5
+        base_speed = 3
         right, left = self.RIGHT, self.LEFT
 
         if self.animation_machine and self.controller:
@@ -445,7 +429,6 @@ class DemoSprite(CharacterSprite):
                 jump = self.get_jump_vector(dy).rotate(
                     (1 / 32) * -x)
 
-                print("\t", jump)
                 self.apply_force(jump)
 
             # FACE DIRECTION
@@ -487,20 +470,21 @@ class DemoSprite(CharacterSprite):
                 dx = self.get_ground_speed() * self.friction
             elif state == "idle" or "crouch" in state:
                 dx = 0
+
                 if self.ground.get_angle() != 0:
-                    m = self.velocity.magnitude
-                    r = m / base_speed
-                    if r > 1:
-                        r = 1
-                    dx = self.get_slide_force() * (-1)
-                    dx -= (dx * (1 - r)) / (base_speed ** 2)
+                    if self.velocity.magnitude < 1:
+                        self.velocity.scale_in_direction(
+                            self.ground.get_angle(), .25
+                        )
             else:
                 dx = movement[state] * self.direction[0] * self.friction * base_speed
-                if state == "dash" and frame_number == 0:
-                    self.velocity.scale_in_direction(
-                        self.ground.get_angle(), 0
-                    )
-                    dx *= 5
+                if state == "dash":
+                    if frame_number < 5:
+                        self.velocity.scale_in_direction(
+                            self.ground.get_angle(), 0
+                        )
+                    if frame_number == 5:
+                        dx *= 5
 
             move = self.get_ground_vector(dx)
             self.apply_force(move)

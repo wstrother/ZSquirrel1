@@ -1,5 +1,3 @@
-from pygame import draw
-
 from zs_constants.zs import FRAME_RATE, SCREEN_SIZE
 from zs_src.entities import Layer
 from zs_src.regions import RectRegion, Vector
@@ -18,7 +16,6 @@ class PhysicsLayer(Layer):
             "friction": cof,
             "toggle hitbox layer": self.toggle_hitbox_layer,
             "toggle vector layer": self.toggle_vector_layer,
-            "toggle walls layer": self.toggle_wall_layer
         }
 
     def set_gravity(self, g):
@@ -27,18 +24,9 @@ class PhysicsLayer(Layer):
     def set_friction(self, coefficients):
         self.friction = coefficients
 
-    def add_wall_layer(self, walls):
-        self.add_sub_layer(
-            DrawWallsLayer(walls))
-
-    def toggle_wall_layer(self):
-        for layer in self.sub_layers:
-            if "draw walls layer" in layer.name:
-                layer.visible = not layer.visible
-
     def add_hitbox_layer(self, group):
         self.add_sub_layer(
-            DrawHitboxLayer(group))
+            HitboxLayer(group))
 
     def toggle_hitbox_layer(self):
         for layer in self.sub_layers:
@@ -47,7 +35,7 @@ class PhysicsLayer(Layer):
 
     def add_vector_layer(self, group):
         self.add_sub_layer(
-            DrawVectorLayer(group))
+            VectorLayer(group))
 
     def toggle_vector_layer(self):
         for layer in self.sub_layers:
@@ -144,7 +132,6 @@ class PhysicsLayer(Layer):
     def get_update_methods(self):
         um = super(PhysicsLayer, self).get_update_methods()
 
-        print("\n--------------")
         return um + [
             self.apply_friction,
             self.apply_acceleration,
@@ -192,32 +179,14 @@ class PhysicsLayer(Layer):
             system()
 
 
-class DrawWallsLayer(Layer):
-    GROUND_COLOR = (125, 125, 0)
-    WALL_COLOR = (100, 200, 0)
-
-    def __init__(self, walls, **kwargs):
-        super(DrawWallsLayer, self).__init__("draw walls layer", **kwargs)
-        self.walls = walls
-        self.visible = True
-
-    def draw(self, screen, offset=(0, 0)):
-        for wall in self.walls:
-            if wall.ground:
-                color = self.GROUND_COLOR
-            else:
-                color = self.WALL_COLOR
-            wall.draw(screen, color, offset=offset)
-
-
-class DrawVectorLayer(Layer):
+class VectorLayer(Layer):
     VELOCITY_COLOR = (0, 255, 0)
     VELOCITY_SCALE = 1
     ACCELERATION_COLOR = (0, 0, 255)
     ACCELERATION_SCALE = 10
 
     def __init__(self, group, **kwargs):
-        super(DrawVectorLayer, self).__init__("draw vector layer", **kwargs)
+        super(VectorLayer, self).__init__("draw vector layer", **kwargs)
         self.group = group
         self.visible = False
 
@@ -238,15 +207,15 @@ class DrawVectorLayer(Layer):
                     offset=(x, y))
 
 
-class DrawHitboxLayer(Layer):
+class HitboxLayer(Layer):
     def __init__(self, group, **kwargs):
-        super(DrawHitboxLayer, self).__init__("draw hitbox layer", **kwargs)
+        super(HitboxLayer, self).__init__("draw hitbox layer", **kwargs)
         self.group = group
         self.visible = False
 
     def draw(self, screen, offset=(0, 0)):
         for sprite in self.group:
-            sprite.draw_collision_region(
+            sprite.collision_region.draw(
                 screen, offset=offset)
 
 
@@ -266,6 +235,7 @@ class PhysicsInterface:
         self.last_ground = None
         self.last_position = None
 
+        self.direction = (1,  0)
         self._collision_region = RectRegion(
             "collision region", (0, 0), (0, 0)
         )
@@ -285,7 +255,7 @@ class PhysicsInterface:
     def collision_region(self):
         r = self._collision_region
 
-        if self.graphics:
+        if self.graphics and hasattr(self.graphics, "get_hitbox"):
             w, h, x, y = self.graphics.get_hitbox()
             px, py = self.position
             x += px
@@ -353,14 +323,6 @@ class PhysicsInterface:
 
         if right:
             return r.midright
-
-    def draw_collision_region(self, screen, offset=(0, 0)):
-        r = self.collision_region
-        x, y = self.position
-        r.x += x + offset[0]
-        r.y += y + offset[1]
-
-        draw.rect(screen, (255, 0, 0), r, 1)
 
     def is_grounded(self):
         return bool(self.ground)
@@ -472,6 +434,18 @@ class PhysicsInterface:
         scalar = 1 / self.mass
         movement = self.velocity.get_copy(scale=scalar)
         movement.name = "movement"
+
+        if self.is_grounded():
+            ground_angle = self.ground.get_angle()
+            ground_speed = movement.get_value_in_direction(
+                ground_angle)[0]
+            static_force = self.gravity.get_copy(
+                scale=self.friction * 1.5)
+
+            if abs(ground_speed) < static_force.magnitude:
+                movement.scale_in_direction(
+                    ground_angle, 0)
+
         self.move(movement.get_value())
 
     def apply_friction(self, cof):

@@ -845,7 +845,7 @@ class HudBox(ContainerSprite):
 
 
 class HudTextSprite(TextSprite):
-    L_STR = "{:>20}: {:^20}"
+    L_STR = "{:>10}: {:^10}"
     T_STR = "({:3.1f}, {:3.1f})"
     F_STR = "{:3.1f}"
 
@@ -860,7 +860,6 @@ class HudTextSprite(TextSprite):
         func = hud[1]
         lhs = value_name
 
-        print(value_name)
         if len(hud) == 2:
             def get_text():
                 value = func()
@@ -898,7 +897,6 @@ class HudTextSprite(TextSprite):
         self.change_text(self.func())
 
     def get_f_text(self, lhs, value):
-        print(lhs)
         if type(value) is tuple:
             rhs = self.T_STR.format(*value)
 
