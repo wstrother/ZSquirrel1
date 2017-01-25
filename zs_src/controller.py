@@ -579,9 +579,6 @@ class ZsController:
             frames = self.get_command_frames(*command.devices)
             command.update(frames[-1])
 
-            # if command.active:
-            #     print(command.name)
-
     def update_frames(self):
         frame = []
 

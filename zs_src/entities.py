@@ -507,12 +507,13 @@ class Layer(ZsEntity):
             x, y = sprite.position
             x += offset[0]
             y += offset[1]
-            if hasattr(sprite, "image"):
-                if sprite.image and sprite.visible:
-                    screen.blit(sprite.image, (x, y))
+            if hasattr(sprite, "graphics"):
+                image = sprite.graphics.get_image()
+                if image and sprite.visible:
+                    screen.blit(image, (x, y))
 
-            if hasattr(sprite, "draw"):
-                sprite.draw(screen, offset)
+            # if hasattr(sprite, "draw"):
+            #     sprite.draw(screen, offset)
 
     # the main() method is called by the Game object's main() method
     # each iteration of the loop (i.e. once per frame) if it is assigned

@@ -1,6 +1,6 @@
-from pygame import Surface
-from pygame.constants import SRCALPHA
-from pygame.transform import scale, flip
+from os.path import join
+
+import pygame
 
 from zs_constants.style import BG_STYLES, BORDER_CORNER_CHOICES, BG, ALPHA
 from zs_constants.zs import TEXT_ANTI_ALIAS, SCREEN_SIZE
@@ -47,12 +47,12 @@ class ImageSet:
 
 
 class Graphics:
-    CLEAR_IMG = Surface((1, 1))
+    CLEAR_IMG = pygame.Surface((1, 1))
     CLEAR_IMG.set_alpha(255)
 
     def __init__(self, entity, get_image_state=None):
         self.name = entity.name
-        self.id_num = entity.id_num
+        # self.id_num = entity.id_num
         self.entity = entity
         self.image_sets = {}
 
@@ -96,6 +96,14 @@ class Graphics:
 
     def reset_image(self):
         pass
+
+    @staticmethod
+    def load_image(folder, image_name):
+        path = join(folder, image_name)
+        image = pygame.image.load(path)
+        image.set_colorkey(image.get_at((0, 0)))
+
+        return image
 
 
 class IconGraphics(Graphics):
@@ -147,7 +155,7 @@ class BgGraphics(Graphics):
 
     @staticmethod
     def make_color_image(size, color):
-        s = Surface(size).convert()
+        s = pygame.Surface(size).convert()
         if color:
             s.fill(color)
         else:
@@ -174,7 +182,8 @@ class BgGraphics(Graphics):
             sx, sy = SCREEN_SIZE
             sx *= 2
             sy *= 2
-            pr_surface = Surface((sx, sy), SRCALPHA, 32)
+            pr_surface = pygame.Surface(
+                (sx, sy), pygame.SRCALPHA, 32)
 
             w, h = pr_surface.get_size()
             img_w, img_h = bg_image.get_size()
@@ -194,7 +203,7 @@ class BgGraphics(Graphics):
     @staticmethod
     def stretch(bg_image, surface):
         w, h = surface.get_size()
-        new_img = scale(bg_image, (w, h))
+        new_img = pygame.scale(bg_image, (w, h))
         surface.blit(new_img, (0, 0))
 
     @staticmethod
@@ -240,7 +249,8 @@ class ContainerGraphics(BgGraphics):
     @staticmethod
     def convert_colorkey(surface, colorkey):
         surface.set_colorkey(colorkey)
-        new_surface = Surface(surface.get_size(), SRCALPHA, 32)
+        new_surface = pygame.Surface(
+            surface.get_size(), pygame.SRCALPHA, 32)
         new_surface.blit(surface, (0, 0))
 
         return new_surface
@@ -261,14 +271,16 @@ class ContainerGraphics(BgGraphics):
 
         if "r" in sides:
             h_offset = w - full_h_side.get_size()[0]
-            surface.blit(flip(full_h_side, True, False), (h_offset, 0))
+            surface.blit(pygame.transform.flip(
+                full_h_side, True, False), (h_offset, 0))
 
         if "t" in sides:
             surface.blit(full_v_side, (0, 0))
 
         if "b" in sides:
             v_offset = h - full_v_side.get_size()[1]
-            surface.blit(flip(full_v_side, False, True), (0, v_offset))
+            surface.blit(pygame.transform.flip(
+                full_v_side, False, True), (0, v_offset))
 
         if corners:
             blit_corners(corner_image, surface, corners)
@@ -291,7 +303,8 @@ class ContainerGraphics(BgGraphics):
             h, v = "hv"
             size = {h: (iw, SCREEN_SIZE[1]),
                     v: (SCREEN_SIZE[0], iw)}[orientation]
-            pr_surface = Surface(size, SRCALPHA, 32)
+            pr_surface = pygame.Surface(
+                size, pygame.SRCALPHA, 32)
 
             span = {h: range(0, size[1], ih),
                     v: range(0, size[0], iw)}[orientation]
@@ -321,6 +334,7 @@ class ContainerGraphics(BgGraphics):
     @staticmethod
     def get_corner(img, string):
         a, b, c, d = BORDER_CORNER_CHOICES
+        flip = pygame.transform.flip
         corner = {a: lambda i: i,
                   b: lambda i: flip(i, True, False),
                   c: lambda i: flip(i, False, True),
@@ -388,7 +402,8 @@ class TextGraphics(Graphics):
         line_height = (line_images[0].get_size()[1] + buffer)
         w, h = widest.get_size()[0], (line_height * len(line_images)) - buffer
 
-        sprite_image = Surface((w, h), SRCALPHA, 32)
+        sprite_image = pygame.Surface(
+            (w, h), pygame.SRCALPHA, 32)
         for i in range(len(line_images)):
             image = line_images[i]
             y = line_height * i

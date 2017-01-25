@@ -1,3 +1,4 @@
+from copy import deepcopy
 from types import FunctionType, MethodType
 
 from zs_constants.gui import A, START
@@ -218,8 +219,9 @@ class ContextLayer(Layer):
 
     def reset_controllers(self):
         for sprite in self.main_group:
-            self.get_value("set_sprite_controller")(
-                sprite)
+            if hasattr(sprite, "controller"):
+                self.get_value("set_sprite_controller")(
+                    sprite)
 
     def handle_controller(self):
         if self.controller.check_command("double tap up"):
@@ -255,7 +257,7 @@ class ContextLayer(Layer):
     def on_spawn(self):
         for c in self.controllers:
             commands = self.get_value("command_dict")
-            c.commands = commands
+            c.commands = deepcopy(commands)
 
         super(ContextLayer, self).on_spawn()
 

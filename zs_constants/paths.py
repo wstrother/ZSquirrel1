@@ -9,6 +9,7 @@ MUSIC = join(RESOURCES, "music")
 SOUNDS = join(RESOURCES, "sounds")
 ANIMATIONS = join(RESOURCES, "animations")
 BG_LAYERS = join(RESOURCES, "bg_layers")
+TILESETS = join(RESOURCES, "tilesets")
 
 CONFIG = "config"
 CONTROLLER_PROFILES = join(CONFIG, "controller_profiles")

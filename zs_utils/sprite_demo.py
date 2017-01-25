@@ -5,11 +5,12 @@ from zs_src.camera import CameraLayer, ParallaxBgLayer
 from zs_src.context import ContextManager, ContextLayer, RegionLayer
 from zs_src.controller import Step, Command
 from zs_src.physics import PhysicsLayer
-from zs_src.regions import Wall, Region
+from zs_src.regions import Wall
 from zs_src.resource_library import get_resources
 from zs_src.sprites import CharacterSprite
 from zs_src.state_machines import AnimationMachine
 from zs_utils.debug_utils import PauseMenu, DebugLayer
+from zs_utils.region_demo import TreePlat
 
 
 class SpriteDemoContext(ContextManager):
@@ -103,21 +104,26 @@ class SpriteDemoContext(ContextManager):
 
     def set_up_regions(self, layer, *args):
         group = RegionLayer.make_group()
-        walls = [Wall((160, 390), (160, 670)),
-                 Wall((800, 550), (1050, 360), True),
-                 Wall((1050, 360), (800, 550)),
-                 Wall((1200, 470), (1430, 280), True),
-                 Wall((1620, 280), (2250, 150), True),
-                 Wall((2490, 90), (2790, -180), True),
-                 Wall((2200, -120), (2500, -220), True),
-                 Wall((2500, -220), (2200, -120)),
-                 Wall((0, 620), (2499, 620), True)]
-        # walls = [
-        #     Wall((0, 300), (6500, 0), True),
-        # ]
-        region = Region("Level Walls")
-        region.walls = walls
-        region.add(group)
+
+        plats = [
+            (5, 0, (0, 450), True),
+            (1, .125, (600, 350), True),
+            (1, .1251, (800, 350), True),
+            (1, .875, (400, 150), True),
+            (1, .8751, (200, 150), True),
+
+        ]
+
+        for args in plats:
+            length, angle, origin, ground = args[0:4]
+            if len(args) == 5:
+                friction = args[4]
+            else:
+                friction = False
+            plat = TreePlat(length, angle, origin,
+                            ground=ground,
+                            friction=friction)
+            plat.add(group)
 
         super(SpriteDemoContext, self).set_up_regions(layer, group)
 
@@ -153,13 +159,13 @@ class SpriteDemoContext(ContextManager):
                 "double tap right",
                 [neutral, press_right, neutral, press_right],
                 ["dpad"], window),
-            "double tap left": Command(
-                "double tap left",
-                [neutral, press_left, neutral, press_left],
-                ["dpad"], window),
             "double tap up": Command(
                 "double tap up",
                 [neutral, press_up, neutral, press_up],
+                ["dpad"], window),
+            "double tap left": Command(
+                "double tap left",
+                [neutral, press_left, neutral, press_left],
                 ["dpad"], window)
         }
 
@@ -263,9 +269,6 @@ class SpriteDemo(ContextLayer):
         # self.sprite_layer.toggle_hitbox_layer()
         # self.debug_layer.visible = True
         # self.set_value("frame_advance", True)
-
-    def on_spawn(self):
-        super(SpriteDemo, self).on_spawn()
 
 
 class SpriteDemoMachine(AnimationMachine):
@@ -468,14 +471,22 @@ class DemoSprite(CharacterSprite):
                 dx = movement[state] * x
             elif state in ("jump_squat", "jump_land"):
                 dx = self.get_ground_speed() * self.friction
+            elif state == "walk":
+                dx = (movement["walk"] * x)
+
+                if self.velocity.j_hat < 0 and frame_number == 0:
+                    slide = self.get_slide_speed()
+                    dx -= slide
             elif state == "idle" or "crouch" in state:
                 dx = 0
 
                 if self.ground.get_angle() != 0:
-                    if self.velocity.magnitude < 1:
+                    if self.get_ground_speed() < 1:
                         self.velocity.scale_in_direction(
-                            self.ground.get_angle(), .25
+                            self.ground.get_angle(), .1
                         )
+                        print("ADJUSTMENT")
+                        # print("\t", self.get_ground_speed())
             else:
                 dx = movement[state] * self.direction[0] * self.friction * base_speed
                 if state == "dash":

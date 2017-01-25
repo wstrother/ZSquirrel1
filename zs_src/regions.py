@@ -102,7 +102,7 @@ class Vector(GroupsInterface):
         self.scale(r)
 
     def scale_in_direction(self, angle, scalar):
-        i, j = self.get_basis_vectors(-angle)
+        i, j = self.get_basis_vectors(angle)
         m1 = Matrix.get_from_vectors(i, j)
 
         m2 = Matrix([
@@ -207,6 +207,7 @@ class Vector(GroupsInterface):
 
     @staticmethod
     def get_basis_vectors(angle):
+        angle *= -1
         i = Vector("basis_i", 1, 0).rotate(angle)
         j = Vector("basis_j", 0, 1).rotate(angle)
 
@@ -285,7 +286,8 @@ class Vector(GroupsInterface):
                   self.DRAW_WIDTH)
 
         draw.circle(screen, color,
-                    (int(dx), int(dy)), self.DRAW_WIDTH)
+                    (int(dx), int(dy)),
+                    self.DRAW_WIDTH)
 
 
 class Wall(Vector):
@@ -494,6 +496,7 @@ class Region(GroupsInterface):
     def __init__(self, name, *points, position=(0, 0), **kwargs):
         super(Region, self).__init__()
         self.name = name
+        self.visible = True
 
         self.walls = []
         self.position = position

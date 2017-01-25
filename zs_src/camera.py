@@ -589,7 +589,7 @@ class CameraLayer(Layer):
 
         def set_scale():
             meter.value = get_scale()
-            self.camera.scale = meter.value
+            self.camera.scale = round(meter.value, 3)
 
         self.track_functions.append(set_scale)
 

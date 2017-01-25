@@ -364,10 +364,14 @@ class PhysicsInterface:
 
         return g
 
-    def get_slide_force(self):
+    def get_slide_speed(self):
         g = self.gravity
+        angle = self.ground.get_angle()
+        slide = g.get_value_in_direction(angle)[0]
 
-        return g.get_value_in_direction(self.ground.get_angle())[0] * -1
+        slide *= -1
+
+        return slide
 
     def get_ground_speed(self):
         if self.ground:
@@ -435,14 +439,21 @@ class PhysicsInterface:
         movement = self.velocity.get_copy(scale=scalar)
         movement.name = "movement"
 
-        if self.is_grounded():
+        if self.is_grounded() and self.get_ground_speed() < 1:
             ground_angle = self.ground.get_angle()
+
             ground_speed = movement.get_value_in_direction(
                 ground_angle)[0]
             static_force = self.gravity.get_copy(
-                scale=self.friction * 1.5)
+                scale=self.friction * 5
+            ).get_value_in_direction(ground_angle - .25)[0]
 
-            if abs(ground_speed) < static_force.magnitude:
+            print(ground_angle,
+                  round(ground_speed, 3),
+                  round(static_force, 3))
+
+            if abs(ground_speed) < static_force:
+                print("\tstatic applied ")
                 movement.scale_in_direction(
                     ground_angle, 0)
 
