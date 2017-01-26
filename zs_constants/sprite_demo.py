@@ -1,0 +1,6 @@
+
+GRAVITY = .66
+MASS = 1
+ELAST = .1
+COF = (.13, .03)
+

@@ -1,0 +1,94 @@
+{
+  "name": "xbox",
+  "devices": [
+    {
+      "mapping": {
+        "map_type": "button",
+        "name": "button_map",
+        "joy_id": 2,
+        "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+        "map_id": 0
+      },
+      "name": "a",
+      "type": "Button"
+    },
+    {
+      "mapping": {
+        "map_type": "button",
+        "name": "button_map",
+        "joy_id": 2,
+        "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+        "map_id": 1
+      },
+      "name": "b",
+      "type": "Button"
+    },
+    {
+      "right": {
+        "mapping": {
+          "dead_zone": 0.1,
+          "map_id": 0,
+          "map_type": "axis",
+          "name": "button_map",
+          "joy_id": 2,
+          "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+          "sign": 1
+        },
+        "name": "button_map",
+        "type": "Button"
+      },
+      "type": "Dpad",
+      "left": {
+        "mapping": {
+          "dead_zone": 0.1,
+          "map_id": 0,
+          "map_type": "axis",
+          "name": "button_map",
+          "joy_id": 2,
+          "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+          "sign": -1
+        },
+        "name": "button_map",
+        "type": "Button"
+      },
+      "name": "dpad",
+      "up": {
+        "mapping": {
+          "dead_zone": 0.1,
+          "map_id": 1,
+          "map_type": "axis",
+          "name": "button_map",
+          "joy_id": 2,
+          "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+          "sign": -1
+        },
+        "name": "button_map",
+        "type": "Button"
+      },
+      "down": {
+        "mapping": {
+          "dead_zone": 0.1,
+          "map_id": 1,
+          "map_type": "axis",
+          "name": "button_map",
+          "joy_id": 2,
+          "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+          "sign": 1
+        },
+        "name": "button_map",
+        "type": "Button"
+      }
+    },
+    {
+      "mapping": {
+        "map_type": "button",
+        "name": "button_map",
+        "joy_id": 2,
+        "joy_name": "Controller (Afterglow Gamepad for Xbox 360)",
+        "map_id": 6
+      },
+      "name": "start",
+      "type": "Button"
+    }
+  ]
+}

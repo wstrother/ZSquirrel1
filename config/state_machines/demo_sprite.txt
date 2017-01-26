@@ -1,0 +1,60 @@
+idle
+	press_direction: walk
+	press_down: crouch_down
+	press_jump: jump_squat
+	tap_direction: dash
+	falling: jump_fall
+walk
+	not_press_direction: idle
+	press_down: crouch_down
+	press_jump: jump_squat
+	tap_direction: dash
+	falling: jump_fall
+crouch_down
+	auto: crouch_idle
+	falling: jump_fall
+crouch_idle
+	not_press_down: crouch_up
+	falling: jump_fall
+crouch_up
+	press_direction: walk, buffer
+	auto: idle
+	falling: jump_fall
+jump_squat
+	auto: jump_up
+jump_up
+	v_acceleration_0: jump_apex
+jump_apex
+	ground_collision: idle
+	auto: jump_fall
+jump_fall
+	ground_collision: jump_land
+jump_land
+	press_jump: jump_squat, buffer
+	run_momentum: run, buffer
+	auto: idle
+	falling: jump_fall
+dash
+	not_press_direction: idle
+	press_jump: jump_squat
+	auto: run
+	falling: jump_fall
+run
+	not_press_direction: run_stop
+	press_opposite_direction: run_stop
+	press_jump: jump_squat
+	falling: jump_fall
+run_stop
+	press_opposite_direction: pivot, buffer
+	press_jump: jump_squat, buffer
+	auto: idle
+	falling: jump_fall
+pivot
+	press_jump: jump_squat, buffer
+	neutral_dpad: idle, buffer
+	auto: run_slow
+	falling: jump_fall
+run_slow
+	not_press_direction: idle
+	press_opposite_direction: idle
+	auto: run

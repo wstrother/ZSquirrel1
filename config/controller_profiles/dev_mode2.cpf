@@ -1,0 +1,112 @@
+{
+  "name": "dev_mode2",
+  "devices": [
+    {
+      "name": "a",
+      "mapping": {
+        "joy_name": "USB GamePad",
+        "name": "button_map",
+        "map_id": 1,
+        "map_type": "button",
+        "joy_id": 1
+      },
+      "type": "Button"
+    },
+    {
+      "name": "b",
+      "mapping": {
+        "joy_name": "USB GamePad",
+        "name": "button_map",
+        "map_id": 2,
+        "map_type": "button",
+        "joy_id": 1
+      },
+      "type": "Button"
+    },
+    {
+      "name": "dpad",
+      "right": {
+        "name": "button_map",
+        "mapping": {
+          "joy_name": "USB GamePad",
+          "name": "button_map",
+          "dead_zone": 0.1,
+          "joy_id": 1,
+          "map_type": "axis",
+          "sign": 1,
+          "map_id": 0
+        },
+        "type": "Button"
+      },
+      "left": {
+        "name": "button_map",
+        "mapping": {
+          "joy_name": "USB GamePad",
+          "name": "button_map",
+          "dead_zone": 0.1,
+          "joy_id": 1,
+          "map_type": "axis",
+          "sign": -1,
+          "map_id": 0
+        },
+        "type": "Button"
+      },
+      "down": {
+        "name": "button_map",
+        "mapping": {
+          "joy_name": "USB GamePad",
+          "name": "button_map",
+          "dead_zone": 0.1,
+          "joy_id": 1,
+          "map_type": "axis",
+          "sign": 1,
+          "map_id": 1
+        },
+        "type": "Button"
+      },
+      "type": "Dpad",
+      "up": {
+        "name": "button_map",
+        "mapping": {
+          "joy_name": "USB GamePad",
+          "name": "button_map",
+          "dead_zone": 0.1,
+          "joy_id": 1,
+          "map_type": "axis",
+          "sign": -1,
+          "map_id": 1
+        },
+        "type": "Button"
+      }
+    },
+    {
+      "x_axis": {
+        "joy_name": "USB GamePad",
+        "name": "axis_map",
+        "sign": 1,
+        "map_id": 1,
+        "joy_id": 1
+      },
+      "name": "main_stick",
+      "type": "ThumbStick",
+      "y_axis": {
+        "joy_name": "USB GamePad",
+        "name": "axis_map",
+        "sign": 1,
+        "map_id": 0,
+        "joy_id": 1
+      }
+    },
+    {
+      "name": "start",
+      "mapping": {
+        "joy_name": "USB GamePad",
+        "name": "button_map",
+        "map_id": 8,
+        "map_type": "button",
+        "joy_id": 1
+      },
+      "type": "Button"
+    }
+  ]
+}

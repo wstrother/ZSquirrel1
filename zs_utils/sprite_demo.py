@@ -1,16 +1,19 @@
 from collections import OrderedDict
 
+import pygame
+
+from zs_constants.paths import TILESETS
 from zs_constants.sprite_demo import GRAVITY, COF
 from zs_src.camera import CameraLayer, ParallaxBgLayer
 from zs_src.context import ContextManager, ContextLayer, RegionLayer
 from zs_src.controller import Step, Command
+from zs_src.graphics import Graphics
 from zs_src.physics import PhysicsLayer
-from zs_src.regions import Wall
+from zs_src.regions import Wall, Region
 from zs_src.resource_library import get_resources
 from zs_src.sprites import CharacterSprite
 from zs_src.state_machines import AnimationMachine
 from zs_utils.debug_utils import PauseMenu, DebugLayer
-from zs_utils.region_demo import TreePlat
 
 
 class SpriteDemoContext(ContextManager):
@@ -28,8 +31,8 @@ class SpriteDemoContext(ContextManager):
         for tree in trees:
             scale = get_scale(tree + ".gif")
             offset = 150
-            depth = 70
-            position = 0, ((depth * scale) + offset) - (110 * scale)
+            depth = 60
+            position = 0, (((depth * scale) + offset) * scale) + offset
 
             bg_layers.append(ParallaxBgLayer(
                 get(tree + ".gif"), scale,
@@ -106,11 +109,11 @@ class SpriteDemoContext(ContextManager):
         group = RegionLayer.make_group()
 
         plats = [
-            (5, 0, (0, 450), True),
-            (1, .125, (600, 350), True),
-            (1, .1251, (800, 350), True),
-            (1, .875, (400, 150), True),
-            (1, .8751, (200, 150), True),
+            (5, .01, (0, 580), True),
+            (2, .08125, (1200, 480), True),
+            (1, .9, (1850, 120), True),
+            (3, .105, (2180, 150), True),
+            (8, .8175, (3000, -150), True),
 
         ]
 
@@ -198,8 +201,8 @@ class SpriteDemoContext(ContextManager):
 
         player = self.get_value("player")
 
-        w1 = ("slow_push", [(450, 350), (300, 150), (0, 75)])
-        w2 = ("fast_push", [(550, 500), (350, 0)])
+        w1 = ("slow_push", [(300, 350), (300, 150), (0, 0)])
+        w2 = ("fast_push", [(400, 500), (550, 0), (0, -100)])
 
         # BUILD CAMERA WINDOWS
         camera_layer.set_up_windows(w1, w2)
@@ -241,7 +244,8 @@ class SpriteDemoContext(ContextManager):
         def get_scale():
             camera = camera_layer.camera
             y = camera.focus_point[1]
-            scale = 1 + (((y + 1200) / 2700) * 2)
+            scale = round(
+                1 + ((y + 500) / 900), 3)
 
             return scale
 
@@ -481,12 +485,10 @@ class DemoSprite(CharacterSprite):
                 dx = 0
 
                 if self.ground.get_angle() != 0:
-                    if self.get_ground_speed() < 1:
+                    if abs(self.get_ground_speed()) < 1:
                         self.velocity.scale_in_direction(
                             self.ground.get_angle(), .1
                         )
-                        print("ADJUSTMENT")
-                        # print("\t", self.get_ground_speed())
             else:
                 dx = movement[state] * self.direction[0] * self.friction * base_speed
                 if state == "dash":
@@ -501,3 +503,99 @@ class DemoSprite(CharacterSprite):
             self.apply_force(move)
 
 
+class PlatformGraphics(Graphics):
+    def __init__(self, entity):
+        super(PlatformGraphics, self).__init__(entity)
+
+    def reset_image(self):
+        self.set_default_image(
+            self.get_platform_image())
+
+    @staticmethod
+    def get_px_width(length):
+        start, mid, end = PlatformGraphics.get_tree_tiles()
+        sw, sh = start.get_size()
+        mw, mh = mid.get_size()
+        ew, eh = end.get_size()
+
+        return sw + (mw * (length - 1)) + ew
+
+    @staticmethod
+    def get_tree_tiles():
+        start, mid, end = (
+            PlatformGraphics.load_image(
+                TILESETS, "treestart.gif"),
+            PlatformGraphics.load_image(
+                TILESETS, "treemid.gif"),
+            PlatformGraphics.load_image(
+                TILESETS, "treeend.gif")
+        )
+
+        return start, mid, end
+
+    def get_platform_image(self):
+        start, mid, end = self.get_tree_tiles()
+
+        angle = self.entity.get_angle()
+
+        sw, sh = start.get_size()
+        mw, mh = mid.get_size()
+        ew, eh = end.get_size()
+
+        length = self.entity.plat_length
+        width = self.get_px_width(length)
+        height = sh
+
+        surface = pygame.Surface((width, height))
+        surface.fill((255, 255, 255))
+        surface.blit(start, (0, 0))
+        for i in range(length - 1):
+            surface.blit(mid, (sw + (i * mw), 0))
+        surface.blit(end, (width - ew, 0))
+
+        surface = pygame.transform.rotate(surface, angle * 360)
+        surface.set_colorkey(
+            surface.get_at((0, 0))
+        )
+
+        return surface
+
+
+class TreePlat(Region):
+    def __init__(self, length, angle=0.0, origin=(0, 0), **kwargs):
+        width = PlatformGraphics.get_px_width(length)
+        ox, oy = origin
+        wall = Wall(origin, (ox + width, oy), **kwargs)
+        wall.rotate(angle)
+
+        self.plat_length = length
+        self.get_angle = wall.get_angle
+        self.normal = wall.normal
+
+        super(TreePlat, self).__init__(
+            "platform")
+        self.graphics = PlatformGraphics(self)
+
+        self.walls = [wall]
+
+    @property
+    def position(self):
+        image = self.graphics.get_image()
+        r = pygame.Rect((0, 0), image.get_size())
+
+        wall = self.walls[0]
+        sx, sy = wall.origin
+        ex, ey = wall.end_point
+
+        mx = (sx + ex) / 2
+        my = (sy + ey) / 2
+        r.center = mx, my
+
+        return r.topleft
+
+    @position.setter
+    def position(self, value):
+        pass
+
+    def update(self, dt):
+        super(TreePlat, self).update(dt)

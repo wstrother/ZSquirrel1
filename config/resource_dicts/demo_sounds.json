@@ -1,0 +1,12 @@
+{
+  "sounds": [
+    "dash.ogg",
+    "jump_squat.ogg",
+    "lite_thud.ogg",
+    "thud.ogg",
+    "run_stop.ogg",
+    "run.ogg",
+    "walk.ogg",
+    "special.ogg"
+  ]
+}

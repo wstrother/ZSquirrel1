@@ -445,15 +445,14 @@ class PhysicsInterface:
             ground_speed = movement.get_value_in_direction(
                 ground_angle)[0]
             static_force = self.gravity.get_copy(
-                scale=self.friction * 5
+                scale=self.friction * 6
             ).get_value_in_direction(ground_angle - .25)[0]
 
-            print(ground_angle,
-                  round(ground_speed, 3),
-                  round(static_force, 3))
+            # print(ground_angle,
+            #       round(ground_speed, 3),
+            #       round(static_force, 3))
 
             if abs(ground_speed) < static_force:
-                print("\tstatic applied ")
                 movement.scale_in_direction(
                     ground_angle, 0)
 
