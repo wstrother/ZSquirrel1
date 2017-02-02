@@ -1,7 +1,8 @@
-from zs_tests.zs_unit_test import ZsUnitTest
-from zs_src.controller import ZsController, FrameSlice, Command, Step
-from random import randint, seed
 from collections import OrderedDict
+from random import randint, seed
+
+from zs_src.controller import Controller, FrameSlice, Command, Step
+from zs_tests.zs_unit_test import ZsUnitTest
 
 
 class FrameSliceUnitTest(ZsUnitTest):
@@ -392,11 +393,11 @@ class ZsControllerUnitTest(ZsUnitTest):
 
     def do_tests(self, r=5):
         l = self.log
-        l("!s", ZsController)
+        l("!s", Controller)
         seed(r)
 
         name = "test controller"
-        controller = ZsController(name)
+        controller = Controller(name)
         assert controller.name == name
         l("name ok")
 
@@ -428,7 +429,7 @@ class ZsControllerUnitTest(ZsUnitTest):
             buttons.append(button)
 
         name = "test controller"
-        controller = ZsController(name)
+        controller = Controller(name)
 
         # UPDATE DEVICES TEST
 

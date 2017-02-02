@@ -1,6 +1,7 @@
 from zs_constants.zs import FRAME_RATE, SCREEN_SIZE
+from zs_src.classes import CollisionSystem
 from zs_src.entities import Layer
-from zs_src.regions import RectRegion, Vector
+from zs_src.geometry import Vector, Rect
 
 
 class PhysicsLayer(Layer):
@@ -43,28 +44,11 @@ class PhysicsLayer(Layer):
                 layer.visible = not layer.visible
 
     @staticmethod
-    def group_perm_collision_check(
-            group, collision_test, handle_collision):
-        tested = []
-
-        tests = 0
-        for sprite in group:
-            tested.append(sprite)
-            check_against = [sprite if sprite not in tested else None for sprite in group]
-
-            for other in check_against:
-                if other:
-                    tests += 1
-                    if collision_test(sprite, other):
-                        handle_collision(sprite, other)
-
-    @staticmethod
-    def sprite_group_collision_check(
-            sprite, group, collision_test, handle_collision):
-        for other in group:
-            if sprite is not other:
-                if collision_test(sprite, other):
-                    handle_collision(sprite, other)
+    def collision_system(group):
+        return CollisionSystem.group_perm_collision_system(
+            PhysicsLayer.check_collision,
+            PhysicsLayer.handle_collision,
+            group)
 
     @staticmethod
     def handle_collision(sprite_a, sprite_b):
@@ -123,7 +107,7 @@ class PhysicsLayer(Layer):
         sprite_b.apply_force(opposite)
 
     @staticmethod
-    def sprite_collision(sprite_a, sprite_b):
+    def check_collision(sprite_a, sprite_b):
         r1 = sprite_a.collision_region
         r2 = sprite_b.collision_region
 
@@ -140,7 +124,7 @@ class PhysicsLayer(Layer):
             self.apply_gravity
         ]
 
-    def apply_gravity(self, dt):
+    def apply_gravity(self):
         for group in self.groups:
             for sprite in group:
                 gravity = self.gravity.get_copy(
@@ -150,17 +134,17 @@ class PhysicsLayer(Layer):
                     gravity.scale_in_direction(angle, 0)
                 sprite.apply_force(gravity)
 
-    def apply_velocity(self, dt):
+    def apply_velocity(self):
         for group in self.groups:
             for sprite in group:
                 sprite.apply_velocity()
 
-    def apply_acceleration(self, dt):
+    def apply_acceleration(self):
         for group in self.groups:
             for sprite in group:
                 sprite.apply_acceleration()
 
-    def apply_friction(self, dt):
+    def apply_friction(self):
         for group in self.groups:
             for sprite in group:
                 cof = self.friction
@@ -170,7 +154,7 @@ class PhysicsLayer(Layer):
                 else:
                     sprite.apply_friction(cof[1])
 
-    def apply_collisions(self, dt):
+    def apply_collisions(self):
         for group in self.groups:
             for sprite in group:
                 sprite.set_off_ground()
@@ -236,8 +220,8 @@ class PhysicsInterface:
         self.last_position = None
 
         self.direction = (1,  0)
-        self._collision_region = RectRegion(
-            "collision region", (0, 0), (0, 0)
+        self._collision_region = Rect(
+            (0, 0), (0, 0)
         )
 
         self.interface = {
@@ -422,8 +406,6 @@ class PhysicsInterface:
             point)
 
     def apply_force(self, vector):
-        # print("\t", vector)
-        # print(self.collision_point)
         self.forces.append(vector)
 
     def apply_acceleration(self):

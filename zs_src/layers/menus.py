@@ -1,13 +1,13 @@
 from zs_constants.zs import DIALOG_POSITION
-from zs_src import menus_gui
 from zs_src.entities import Layer
+from zs_src.sprites import menus_gui
 
 
 class HeadsUpDisplay(Layer):
     def __init__(self, name, **kwargs):
         super(HeadsUpDisplay, self).__init__(name, **kwargs)
 
-        self.groups = [self.make_group()]
+        self.groups = [self.Group()]
         self.hud_group = self.groups[0]
         self.tools = HudTools(self)
 
@@ -49,7 +49,7 @@ class Menu(Layer):
                                ("block", mb)))
 
     def set_menu_group(self):
-        self.groups = [self.make_group()]
+        self.groups = [self.Group()]
 
     @property
     def menu_group(self):

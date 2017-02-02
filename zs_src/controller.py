@@ -275,23 +275,22 @@ class InputManager:
     def make_controller(self, profile_name):
         profile = self.controller_profiles[profile_name]
 
-        return ZsController(profile_name, profile, self)
+        return Controller(profile_name, profile, self)
 
     def load_profiles(self, names):
         for name in names:
-            path = join(CONTROLLER_PROFILES, name + ".cpf")
             interp = Profile.make_profile
 
-            file = open(path, "r")
-            profile = interp(json.load(file))
-            file.close()
+            profile = interp(Profile.load_json_dict(
+                CONTROLLER_PROFILES, name + ".cpf"
+            ))
 
             profile.devices = [interp(d) for d in profile.devices]
 
             self.controller_profiles[name] = profile
 
 
-class ZsInputDevice:
+class InputDevice:
     def __init__(self, name, controller):
         self.name = name
         self.default = None
@@ -311,7 +310,7 @@ class ZsInputDevice:
         pass
 
 
-class Button(ZsInputDevice):
+class Button(InputDevice):
     def __init__(self, *args):
         super(Button, self).__init__(*args)
 
@@ -355,7 +354,7 @@ class Button(ZsInputDevice):
             self.held = 0
 
 
-class Dpad(ZsInputDevice):
+class Dpad(InputDevice):
     FIRST = 0
 
     def __init__(self, *args):
@@ -418,7 +417,7 @@ class Dpad(ZsInputDevice):
         return x, y
 
 
-class ThumbStick(ZsInputDevice):
+class ThumbStick(InputDevice):
     def __init__(self, *args, dead_zone=STICK_DEAD_ZONE):
         super(ThumbStick, self).__init__(*args)
         self.dead_zone = dead_zone
@@ -456,7 +455,7 @@ class ThumbStick(ZsInputDevice):
         return x, y
 
 
-class Trigger(ZsInputDevice):
+class Trigger(InputDevice):
     def __init__(self, *args):
         super(Trigger, self).__init__(*args)
 
@@ -475,7 +474,7 @@ class Trigger(ZsInputDevice):
         return mapping.get_value()
 
 
-class ZsController:
+class Controller:
     Button, Dpad, ThumbStick, Trigger = Button, Dpad, ThumbStick, Trigger
 
     def __init__(self, name, profile, input_manager):

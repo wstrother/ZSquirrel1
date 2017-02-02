@@ -5,15 +5,16 @@ import pygame
 from zs_constants.paths import BG_LAYERS
 from zs_src.classes import Meter
 from zs_src.entities import Layer
+from zs_src.entities import RectRegion
+from zs_src.geometry import Vector, Wall, Rect
 from zs_src.graphics import IconGraphics
-from zs_src.physics import PhysicsInterface
-from zs_src.regions import Vector, Wall, RectRegion
+from zs_src.layers.physics import PhysicsInterface
 
 
 class Camera(PhysicsInterface):
     WINDOW_COLOR = (0, 255, 255)
 
-    class Window(RectRegion):
+    class Window(Rect):
         def __init__(self, camera, window_size, shift, offset):
             x, y = camera.screen_size
             x /= 2
@@ -33,8 +34,7 @@ class Camera(PhysicsInterface):
             )
 
             super(Camera.Window, self).__init__(
-                "camera window", window_size,
-                (0, 0))
+                window_size, (0, 0))
 
         @property
         def size(self):
@@ -73,9 +73,9 @@ class Camera(PhysicsInterface):
             y_max = y + (dy / 2)
 
             x_offset = Meter(
-                "x_offset", x, x_max, x_min)
+                "x_offset", x_min, x, x_max)
             y_offset = Meter(
-                "y_offset", y, y_max, y_min)
+                "y_offset", y_min, y, y_max)
 
             return x_offset, y_offset
 
@@ -345,15 +345,8 @@ class CameraLayer(Layer):
         else:
             self.camera.anchor = 0, value
 
-    def set_edge_bounds(self, span, vertical=False):
-        if not vertical:
-            self.h_span = span
-
-        else:
-            self.v_span = span
-
-    def update(self, dt):
-        super(CameraLayer, self).update(dt)
+    def update(self):
+        super(CameraLayer, self).update()
 
         self.camera.apply_acceleration()
         for func in self.track_functions:
@@ -585,7 +578,7 @@ class CameraLayer(Layer):
         self.track_functions.append(set_heading)
 
     def set_scale_tracking_function(self, get_scale, span):
-        meter = Meter("span", span[0], span[1], span[0])
+        meter = Meter("span", span[0], span[0], span[1])
 
         def set_scale():
             meter.value = get_scale()
@@ -681,7 +674,7 @@ class ParallaxBgLayer(Layer):
 
                 for j in range((sh // h) + 2):
                     oy = y + ((j - 1) * h)
-                    self.graphics.draw(
+                    self.graphics.draw_walls(
                         screen, offset=(ox, oy))
 
         elif x_wrap:
@@ -694,9 +687,9 @@ class ParallaxBgLayer(Layer):
         elif y_wrap:
             for j in range((sh // h) + 2):
                 oy = y + ((j - 1) * h)
-                self.graphics.draw(
+                self.graphics.draw_walls(
                     screen, offset=(x, oy))
 
         else:
-            self.graphics.draw(
+            self.graphics.draw_walls(
                 screen, offset=(x, y))

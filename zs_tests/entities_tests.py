@@ -3,14 +3,14 @@ from random import randint, seed
 from pygame.sprite import Group
 
 from zs_constants.zs import TRANSITION_TIME
-from zs_src.entities import ZsEntity, ZsSprite, Layer
+from zs_src.entities import Entity, Sprite, Layer
 from zs_tests.zs_unit_test import ZsUnitTest
 
 
 class ZsEntityUnitTest(ZsUnitTest):
     def do_tests(self, r=5):
         l = self.log
-        l("!s", ZsEntity)
+        l("!s", Entity)
         seed(r)
 
         self.test_init()
@@ -29,12 +29,12 @@ class ZsEntityUnitTest(ZsUnitTest):
         l = self.log
         l("!m", self.test_init)
 
-        entity = ZsEntity("test entity")
+        entity = Entity("test entity")
 
         assert entity.name == "test entity"
         l("name ok")
 
-        assert entity.id_num == ZsEntity.ID_NUM - 1
+        assert entity.id_num == Entity.ID_NUM - 1
         l("id_num ok")
 
         assert entity.parent is None
@@ -49,11 +49,11 @@ class ZsEntityUnitTest(ZsUnitTest):
         assert entity.death_time == TRANSITION_TIME
         l("death_time ok")
 
-        assert entity.states == ZsEntity.STATES
+        assert entity.states == Entity.STATES
         l("states ok")
         l("")
 
-    class MockEntity(ZsEntity):
+    class MockEntity(Entity):
         def __init__(self, *args, **kwargs):
             super(ZsEntityUnitTest.MockEntity, self).__init__(*args, **kwargs)
             self.adjust_size_called = False
@@ -139,7 +139,7 @@ class ZsEntityUnitTest(ZsUnitTest):
         l("!m", self.test_event_methods)
 
         entity = ZsEntityUnitTest.MockEntity("test entity")
-        states, event_names = ZsEntity.STATES, ZsEntity.EVENT_NAMES
+        states, event_names = Entity.STATES, Entity.EVENT_NAMES
         spawning, alive, dying, dead = states
 
         assert sorted(list(entity.event_handler.event_methods.keys())) == sorted(event_names)
@@ -178,7 +178,7 @@ class ZsEntityUnitTest(ZsUnitTest):
 class ZsSpriteUnitTest(ZsUnitTest):
     def do_tests(self, r=5):
         l = self.log
-        l("!s", ZsSprite)
+        l("!s", Sprite)
         seed(r)
 
         self.test_group_methods()
@@ -193,7 +193,7 @@ class ZsSpriteUnitTest(ZsUnitTest):
 
         chars = "abcdefg"
         group = Group()
-        sprites = [ZsSprite(char) for char in chars]
+        sprites = [Sprite(char) for char in chars]
         main_sprite = sprites[0]
         main_sprite.sub_sprites = sprites[1:]
 
@@ -213,10 +213,10 @@ class ZsSpriteUnitTest(ZsUnitTest):
 
         chars = "abcdefg"
         group = Group()
-        sprites = [ZsSprite(char) for char in chars]
+        sprites = [Sprite(char) for char in chars]
         main_sprite = sprites[0]
         main_sprite.sub_sprites = sprites[1:]
-        spawning, alive, dying, dead = ZsEntity.STATES
+        spawning, alive, dying, dead = Entity.STATES
 
         main_sprite.add(group)
         group.update(1)
@@ -261,7 +261,7 @@ class LayerUnitTest(ZsUnitTest):
                 self.test_groups = [g1, g2]
                 self.groups = [g1, g2]
 
-                class TestSprite(ZsSprite):
+                class TestSprite(Sprite):
                     def __init__(self, *args, **kwargs):
                         super(TestSprite, self).__init__(*args, **kwargs)
                         self.update_called = False
@@ -311,7 +311,7 @@ class LayerUnitTest(ZsUnitTest):
         l("add_group ok")
         l("populate ok")
 
-        spawning, alive, dying, dead = ZsEntity.STATES
+        spawning, alive, dying, dead = Entity.STATES
         test_layer.update(1)
         assert test_layer.test_sprite.update_called
         l("update_groups ok")

@@ -1,11 +1,11 @@
 from types import FunctionType, MethodType
 
-from zs_constants.zs import SCREEN_SIZE, FRAME_RATE
+from zs_constants.zs import SCREEN_SIZE
 from zs_src.classes import CacheList
 from zs_src.events import Event
-from zs_src.gui import ContainerSprite, TextSprite
-from zs_src.menus import Menu, HeadsUpDisplay
-from zs_src.menus_gui import TextFieldOption, SwitchOption, TextOption
+from zs_src.layers.menus import Menu, HeadsUpDisplay
+from zs_src.sprites.gui import ContainerSprite, TextSprite
+from zs_src.sprites.menus_gui import TextFieldOption, SwitchOption, TextOption
 
 
 class DebugUtils(Menu):
@@ -498,11 +498,11 @@ class PauseMenu(Menu):
         if in_model("frame_advance"):
             self.add_frame_advance_option(mb)
 
-        if in_model("sprite_dict"):
-            self.add_sprite_options(mb)
+        if in_model("items_dict"):
+            self.add_item_options(mb)
 
-        if in_model("layer_dict"):
-            ld = self.get_value("layer_dict")
+        if in_model("layers_dict"):
+            ld = self.get_value("layers_dict")
             layers = [l["layer"] for l in ld.values()]
             interface_layers = [
                 l for l in layers if hasattr(l, "interface")
@@ -529,10 +529,10 @@ class PauseMenu(Menu):
             frame_option, frame_advance)
         mb.add_member_sprite(frame_option)
 
-    def add_sprite_options(self, mb):
+    def add_item_options(self, mb):
         tools = self.tools
         spawn_option = tools.TextOption(
-            "Spawn Sprite"
+            "Spawn Item"
         )
         mb.add_member_sprite(spawn_option)
 
@@ -541,11 +541,11 @@ class PauseMenu(Menu):
             spawn_option)
 
         sprite_option = tools.TextOption(
-            "Sprite Options")
+            "Item Options")
         mb.add_member_sprite(sprite_option)
 
         self.add_sub_block(
-            mb, self.get_sprite_dict_block(),
+            mb, self.get_item_dict_block(),
             sprite_option)
 
     def add_controller_option(self, mb):
@@ -618,7 +618,7 @@ class PauseMenu(Menu):
         return block
 
     def get_spawn_sub_block(self):
-        sprite_dict = self.get_value("sprite_dict")
+        sprite_dict = self.get_value("items_dict")
         tools = self.tools
         x, y = self.main_block.position
         x += self.main_block.size[0]
@@ -638,7 +638,7 @@ class PauseMenu(Menu):
             load(name, position=(sx, sy))
 
         spawn_option = to(
-            "Spawn Sprite")
+            "Spawn Item")
         tools.set_function_call_on_activation(
             spawn_option, spawn)
 
@@ -649,20 +649,20 @@ class PauseMenu(Menu):
             [spawn_option]
         ]
         block = tools.OptionBlock(
-            "spawn sprite block", members,
+            "spawn item block", members,
             position=(x, y), table_style="grid")
 
         return block
 
-    def get_sprite_dict_block(self):
-        sprite_dict = self.get_value("sprite_dict")
+    def get_item_dict_block(self):
+        items_dict = self.get_value("items_dict")
         tools = self.tools
         x, y = self.main_block.position
         x += self.main_block.size[0]
 
         block = tools.OptionBlock(
-            "sprite dict block", position=(x, y))
-        for name in sprite_dict:
+            "item dict block", position=(x, y))
+        for name in items_dict:
             value_name = "_" + name
             if self.get_value(value_name):
                 o = tools.make_text_option(
@@ -725,7 +725,7 @@ class DebugLayer(HeadsUpDisplay):
             cutoff = 3
 
         block = self.tools.ContainerSprite(
-            "physics reporter box",
+            "HUD box container",
             size=(w, 0), table_style="cutoff {}".format(cutoff),
             position=(25, 0)
         )
@@ -733,109 +733,34 @@ class DebugLayer(HeadsUpDisplay):
         block.visible = False
         self.hud_table = block
 
-    @staticmethod
-    def get_frame_rate_hud(dt):
-        rates = AverageCache(int(FRAME_RATE * dt))
-        times = AverageCache(int(FRAME_RATE * dt))
-
-        def get_text(d):
-            time = d["dt"]
-            rate = 1 / time
-            times.append(time)
-            rates.append(rate)
-
-            rate_text = "   {:2.3f}".format(rates.average())
-            dt_text = "dt {:2.3f} s".format(times.average())
-            text = rate_text + "\n" + dt_text
-
-            return text
-
-        return get_text
-
-    @staticmethod
-    def get_animation_machine_hud(dt, maximum=None):
-        if not maximum:
-            maximum = DebugLayer.ANIMATION_MACHINE_MAX
-
-        states = ChangeCache(int(FRAME_RATE * dt))
-
-        def get_text(a):
-            state = a.get_state().name
-            states.append(state)
-
-            return states.changes()[-maximum:]
-
-        return get_text
-
-    @staticmethod
-    def get_physics_interface_hud():
-        def get_text(p):
-            velocity = p.velocity.get_value()
-            accel = p.acceleration.get_value()
-            position = p.position
-            ground = p.is_grounded()
-
-            f_str = "({:3.1f}, {:3.1f})"
-            l_str = "{:>15}: {:^17}"
-
-            text = [
-                l_str.format("Acceleration: ", f_str.format(*accel)),
-                l_str.format("Velocity: ", f_str.format(*velocity)),
-                l_str.format("Position: ", f_str.format(*position)),
-                "{:^32}".format("Grounded: {}".format(ground))
-            ]
-
-            return text
-
-        return get_text
-
-    @staticmethod
-    def get_camera_hud():
-        def get_text(cl):
-            c = cl.camera
-
-            l_str = "{:>13}: {:^17}"
-            f_str = "({:3.1f}, {:3.1f})"
-
-            text = [
-                l_str.format("Focus point", f_str.format(*c.focus_point)),
-                l_str.format("Anchor values", f_str.format(*c.anchor)),
-                l_str.format("Position", f_str.format(*c.position)),
-                l_str.format("Offset", f_str.format(*c.get_offset()))
-            ]
-
-            return text
-
-        return get_text
-
-    def add_hud_box(self, name, huds, interval=5):
+    def add_hud_box(self, name, obj, fields, interval=5):
         self.hud_table.add_member_sprite(
-            HudBox(name, huds, interval)
+            HudBox(name, obj, fields, interval)
         )
 
-    def update(self, dt):
-        self.model.set_value("dt", dt)
-        super(DebugLayer, self).update(dt)
+    def update(self):
+        super(DebugLayer, self).update()
 
 
 class HudBox(ContainerSprite):
-    def __init__(self, name, huds, interval=5, **kwargs):
+    def __init__(self, name, obj, fields, interval=5, **kwargs):
         kwargs.update({"align_h": "c"})
         super(HudBox, self).__init__(
             name + " HUD", title=name,
             **kwargs)
 
+        self.object = obj
         self.interval = interval
-        self.set_up_huds(huds)
+        self.set_up_huds(fields)
 
-    def set_up_huds(self, huds):
-        # hud: (value_name, [average/changes], dt, maximum
+    def set_up_huds(self, fields):
+        # hud: (func, [average/changes], dt, maximum
 
-        for hud in huds:
-            self.add_text_field(hud)
+        for field in fields:
+            self.add_field(self.object, field)
 
-    def add_text_field(self, hud):
-        text_field = HudTextSprite(hud)
+    def add_field(self, obj, field):
+        text_field = HudField(obj, field)
         self.add_timer(
             "HUD update frequency", self.interval,
             on_switch_off=text_field.set_text,
@@ -844,54 +769,54 @@ class HudBox(ContainerSprite):
         self.add_member_sprite(text_field)
 
 
-class HudTextSprite(TextSprite):
+class HudField(TextSprite):
     L_STR = "{:>10}: {:^10}"
     T_STR = "({:3.1f}, {:3.1f})"
     F_STR = "{:3.1f}"
 
-    def __init__(self, hud, **kwargs):
-        super(HudTextSprite, self).__init__("", **kwargs)
+    def __init__(self, obj, field, **kwargs):
+        super(HudField, self).__init__("", **kwargs)
 
         self.cache = None
-        self.func = self.get_func(hud)
+        self.func = self.get_func(obj, field)
 
-    def get_func(self, hud):
-        value_name = hud[0]
-        func = hud[1]
+    def get_func(self, obj, field):
+        value_name = field[0]
+        func = field[1]
         lhs = value_name
 
-        if len(hud) == 2:
+        if len(field) == 2:
             def get_text():
-                value = func()
+                value = func(obj)
 
                 return self.get_f_text(
                     lhs, value)
 
         else:
-            if hud[2] == "average":
-                self.cache = AverageCache(hud[3])
+            if field[2] == "average":
+                self.cache = AverageCache(field[3])
 
                 def get_text():
-                    value = func()
+                    value = func(obj)
                     self.cache.append(value)
 
                     return self.get_f_text(
                         lhs, self.cache[-1])
 
-            # if hud[2] == "changes":
+            # if field[2] == "changes":
             else:
-                self.cache = ChangeCache(hud[3])
+                self.cache = ChangeCache(field[3])
 
                 def get_text():
-                    value = func()
+                    value = func(obj)
                     self.cache.append(value)
 
-                    return self.cache.changes(hud[4])
+                    return self.cache.changes(field[4])
 
         return get_text
 
-    def update(self, dt):
-        super(HudTextSprite, self).update(dt)
+    def update(self):
+        super(HudField, self).update()
 
     def set_text(self):
         self.change_text(self.func())

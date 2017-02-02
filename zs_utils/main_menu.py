@@ -2,7 +2,7 @@ from os import listdir
 
 from launch_environment import get_environment
 from zs_constants.paths import ZS_UTILS
-from zs_src.menus import Menu
+from zs_src.layers.menus import Menu
 
 
 class MainMenu(Menu):

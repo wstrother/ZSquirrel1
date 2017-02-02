@@ -3,9 +3,8 @@ from sys import exit
 import pygame
 
 from zs_constants.gui import LEFT_RIGHT, UP_DOWN_LEFT_RIGHT, ADVANCE, BACK, DPAD
-from zs_src.classes import StateMeter
-from zs_src.gui import TextSprite, ContainerSprite
-
+from zs_src.classes import Meter
+from zs_src.sprites.gui import TextSprite, ContainerSprite
 
 class SelectableInterface:
     EVENT_NAMES = "select", "deselect", "activate", "return"
@@ -128,8 +127,13 @@ class ChangeBlockOption(TextOption):
 class SwitchOption(TextOption):
     def __init__(self, switches, **kwargs):
         super(SwitchOption, self).__init__(switches[0], **kwargs)
-        self.switch = StateMeter("", switches)
+        self.switches = switches
+        self.switch = Meter("switch", len(switches) - 1)
         self.add_event_methods("change_switch")
+
+    @property
+    def switch_state(self):
+        return self.switches[self.switch.value]
 
     def on_activate(self):
         super(SwitchOption, self).on_activate()
@@ -145,13 +149,17 @@ class SwitchOption(TextOption):
             super(SwitchOption, self).on_select()
 
     def set_switch(self, state):
-        self.switch.set_state(state)
+        if type(state) is str:
+            self.switch.value = self.switches.index(state)
+        elif type(state) is int:
+            self.switch.value = state
+
         self.set_text_to_switch()
 
     def set_text_to_switch(self):
-        if self.text != self.switch.state:
-            self.handle_event("change_switch text=" + self.switch.state)
-        self.change_text(self.switch.state)
+        if self.text != self.switch_state:
+            self.handle_event("change_switch text=" + self.switch_state)
+        self.change_text(self.switch_state)
 
     def turn_on_cycling(self):
         self.ui_directions = LEFT_RIGHT

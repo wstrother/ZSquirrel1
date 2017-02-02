@@ -20,7 +20,7 @@ class ImageSet:
 
     def set_images(self, images):
         self.images = images
-        self._meter = Meter(self.name, 0, maximum=len(images) - 1)
+        self._meter = Meter(self.name, 0, len(images) - 1)
 
     @property
     def max_frame(self):

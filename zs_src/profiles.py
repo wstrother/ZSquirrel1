@@ -1,3 +1,6 @@
+import json
+from os.path import join
+
 from zs_src.events import Event
 
 
@@ -34,6 +37,16 @@ class Profile(Event):
                             item[key] = sub_item.get_json_dict()
 
                 d[name] = item
+
+        return d
+
+    @staticmethod
+    def load_json_dict(path, filename):
+        path = join(path, filename)
+
+        file = open(path, "r")
+        d = json.load(file)
+        file.close()
 
         return d
 

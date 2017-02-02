@@ -71,7 +71,7 @@ def make_files(lines):
 
 
 def update_constants():
-    cfg_path = join(CONFIG_PATH, "zs.cfg")
+    cfg_path = join(CONFIG_PATH, "zs.constants")
     cfg_file = open(cfg_path, "r")
     cfg = [line for line in cfg_file]
     cfg_file.close()

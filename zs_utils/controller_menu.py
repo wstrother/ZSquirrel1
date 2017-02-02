@@ -3,8 +3,8 @@ from os.path import join
 
 from update_constants import update_constants
 from zs_constants.paths import CONFIG, CONTROLLER_TEMPLATES, CONTROLLER_PROFILES
-from zs_src.controller import InputMapper, ZsController
-from zs_src.menus import Menu
+from zs_src.controller import InputMapper, Controller
+from zs_src.layers.menus import Menu
 from zs_src.profiles import Profile
 
 CPF, CTP = ".cpf", ".ctp"
@@ -39,7 +39,7 @@ class ControllerMenu(Menu):
                 profiles.append(get_file_name(n))
         self.set_value("profiles", profiles)
 
-        path = join(CONFIG, "zs.cfg")
+        path = join(CONFIG, "zs.constants")
         file = open(path, "r")
         lines = [line for line in file]
         file.close()
@@ -243,7 +243,7 @@ class ControllerMenu(Menu):
         else:
             output = ", ".join(output)
 
-        path = join(CONFIG, "zs.cfg")
+        path = join(CONFIG, "zs.constants")
         file = open(path, "r")
         lines = []
         for line in file:
@@ -692,7 +692,7 @@ class MakeProfileMenu(Menu):
         d = {
             "name": self.profile_name,
             "devices": [d for d in devices if d]}
-        controller = ZsController(
+        controller = Controller(
             d["name"], Profile.make_profile(d),
             self.controller.input_manager)
 

@@ -17,17 +17,26 @@ class Meter:
     dynamic use so if you want to ensure edge case errors, that logic will
     need to be implemented by the relevant Entity in the game engine.
     """
-    def __init__(self, name, value, maximum=None, minimum=0):
+    # Meter(name, value) ->                     minimum = 0, value = value, maximum = value
+    # Meter(name, value, maximum) ->            minimum = 0, value = value, maximum = maximum
+    # Meter(name, minimum, value, maximum) ->   minimum = 0, value = value, maximum = maximum
+    def __init__(self, name, *args):
+        value = args[0]
+        maximum = args[0]
+        minimum = 0
+        if len(args) == 2:
+            maximum = args[1]
+        if len(args) == 3:
+            minimum = args[0]
+            value = args[1]
+            maximum = args[2]
+
         self.name = name
         self._value = value
-        self._minimum = minimum         # default minimum is set to 0.
+        self._maximum = maximum
+        self._minimum = minimum
 
-        if maximum is None:             # default maximum is the same as
-            self._maximum = value       # the initial value
-        else:
-            self._maximum = maximum
-
-        if self._maximum < minimum:     # minimum should always be leq than maximum
+        if maximum < minimum:     # minimum should always be leq than maximum
             raise ValueError("bad maximum / minimum values passed to meter object")
         self.normalize()
 
@@ -155,55 +164,8 @@ class Meter:
 
         return self.value
 
-
-# DEPRECATED!!!
-
-class StateMeter(Meter):
-    """
-    StateMeter creates an enumerable object out of a list of strings
-    for use with state machines. The "state" can be set through the
-    "set_state" method or by assigning to the object's "value" property,
-    which will preserve all the edge case handling behavior.
-
-    The underlying Meter object will have a minimum of 0, initial value
-    of 0 and a maximum equal to the highest index of the states list.
-    """
-    def __init__(self, name, states):
-        self.states = states
-
-        maximum = len(states) - 1
-        if maximum < 0:
-            raise ValueError("Empty states list passed")
-
-        super(StateMeter, self).__init__(name, 0, maximum=maximum)
-
-    def __repr__(self):
-        n, v, m, s = self.name, self.value, self.maximum, self.state
-
-        return "{}: {}/{} '{}'".format(n, v, m, s)
-
-    @property
-    def state(self):
-        i = round(self.value)
-        try:
-            return self.states[i]
-        except IndexError:
-            raise IndexError("State meter value outside state list range")
-
-    @property
-    def maximum(self):
-        return len(self.states) - 1
-
-    @property
-    def minimum(self):
-        return 0
-
-    def set_state(self, state):
-        if state in self.states:
-            i = self.states.index(state)
-            self.value = i
-        else:
-            raise ValueError("state passed not in states list")
+FRAMES = "f"
+SECONDS = "s"
 
 
 class Timer(Meter):
@@ -227,17 +189,17 @@ class Timer(Meter):
     The temp flag determines if the timer will be removed by the Clock
     object that calls it's tick() method.
     """
-    def __init__(self, name, duration, unit="f", temp=True):
+    def __init__(self, name, duration, unit=FRAMES, temp=True):
         if duration <= 0:
             raise ValueError("bad duration", 0)
 
         self.is_off = self.is_empty
         self.reset = self.refill
 
-        if unit not in "fs" or len(unit) > 1:
+        if unit not in (FRAMES, SECONDS):
             raise ValueError("bad string passed as 'unit' arg", 1)
 
-        super(Timer, self).__init__(name, duration, maximum=duration)
+        super(Timer, self).__init__(name, duration)
         self.temp = temp
         self.unit = unit
 
@@ -266,9 +228,9 @@ class Timer(Meter):
     def tick(self, dt):
         before = self.is_on()
 
-        if self.unit == "f":
+        if self.unit == FRAMES:
             self.value -= 1
-        if self.unit == "s":    # 'dt' used for second based timers
+        if self.unit == SECONDS:    # 'dt' used for second based timers
             self.value -= dt
 
         self.on_tick()
@@ -302,6 +264,15 @@ class ChargeMeter(Meter):
             if self.value and self.clear_func:
                 self.clear_func(self)
             self.reset()
+
+
+class LerpMeter(Meter):
+    def __init__(self, name, func):
+        super(LerpMeter, self).__init__(name, 0, 1)
+        self.func = func
+
+    def get_func_value(self):
+        return self.func(self.value)
 
 
 class Clock:
@@ -348,7 +319,7 @@ class Clock:
 
         self.to_remove += to_remove
 
-    def tick(self, dt):
+    def tick(self, dt=0):
         for t in self.queue:                # add queue timers to active timers list
             if t not in self.to_remove:     # unless that timer is set to be removed
                 self.timers.append(t)
@@ -478,3 +449,73 @@ class CacheList(list):
             self.append(item)
 
         return self
+
+CHECK_COLLISION = "check_collision"
+HANDLE_COLLISION = "handle_collision"
+ITEM = "item"
+ITEM_GROUP = "item_group"
+GROUP = "group"
+GROUP_PERM = "group_perm"
+
+
+class CollisionSystem:
+    # collision dict = {
+    #   "check": check_function
+    #   "handle": handle_collision
+    #   "item": item1, item2
+    #   "item_group": item, group
+    #   "group": group1, group2
+    #   "group_perm": group,
+    # }
+    def __init__(self, check, handle, perm, *args):
+        if perm == ITEM:
+            system = self.item_collision_system
+            args += check, handle
+
+        elif perm == ITEM_GROUP:
+            system = self.item_group_collision_system
+            args += check, handle
+
+        elif perm == GROUP:
+            system = self.group_collision_system
+            args += check, handle
+
+        elif perm == GROUP_PERM:
+            system = self.group_perm_collision_system
+            args += check, handle
+
+        else:
+            raise ValueError("bad perm arg passed to {}: \n{}".format(
+                self, perm))
+
+        self.system = system
+        self.args = args
+
+    def apply(self):
+        self.system(*self.args)
+
+    @staticmethod
+    def item_collision_system(check, handle, item1, item2):
+        if check(item1, item2):
+            handle(item1, item2)
+
+    @staticmethod
+    def item_group_collision_system(check, handle, item, group):
+        for other in group:
+            if item is not other:
+                CollisionSystem.item_collision_system(check, handle, item, other)
+
+    @staticmethod
+    def group_perm_collision_system(check, handle, group):
+        tested = []
+
+        for item in group:
+            tested.append(item)
+            check_against = [sprite for sprite in group if sprite not in tested]
+
+            CollisionSystem.item_group_collision_system(check, handle, item, check_against)
+
+    @staticmethod
+    def group_collision_system(check, handle, group1, group2):
+        for item in group1:
+            CollisionSystem.item_group_collision_system(check, handle, item, group2)

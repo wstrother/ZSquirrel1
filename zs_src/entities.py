@@ -2,12 +2,12 @@ from sys import exit
 from types import MethodType
 
 from zs_constants.zs import SCREEN_SIZE, TRANSITION_TIME
-from zs_src.classes import StateMeter
-from zs_src.events import ZsEventInterface
-from zs_src.regions import RectRegion, GroupsInterface
+from zs_src.classes import CollisionSystem
+from zs_src.events import EventInterface
+from zs_src.geometry import Wall, Rect
 
 
-class Model(ZsEventInterface):
+class Model(EventInterface):
     def __init__(self, name, v_dict):
         self.name = name
         super(Model, self).__init__(name)
@@ -124,8 +124,8 @@ class Model(ZsEventInterface):
         if not self.event.get("ignore", False):
             self.handle_change(name)
 
-    def update(self, dt):
-        self.event_handler.update(dt)
+    def update(self):
+        self.event_handler.update()
 
         self.check_object_listeners()
 
@@ -151,7 +151,7 @@ class Model(ZsEventInterface):
                 self.set_value(value_name, value)
 
 
-class ZsEntity(ZsEventInterface):
+class Entity(EventInterface):
     """
     The ZsEntity Class is an abstract superclass that provides the interface
     for all objects that will directly be loaded, updated, and drawn by the
@@ -172,12 +172,10 @@ class ZsEntity(ZsEventInterface):
         self.name = name
         self.id_num = self.get_id()
 
-        super(ZsEntity, self).__init__(name)
-        self.add_event_methods(*ZsEntity.EVENT_NAMES)
+        super(Entity, self).__init__(name)
+        self.add_event_methods(*Entity.EVENT_NAMES)
 
-        self.rect = RectRegion(
-            name, size, position)
-        # self.rect = pygame.Rect(position, size)
+        self.rect = Rect(size, position)
 
         self._graphics = None
         self.parent = None
@@ -188,25 +186,29 @@ class ZsEntity(ZsEventInterface):
 
         self.spawn_time = TRANSITION_TIME
         self.death_time = TRANSITION_TIME
-        self._state = StateMeter(name, ZsEntity.STATES)
+        self.spawn_state = None
 
-    def reset_transition_events(self):
-        events = "spawning", "birth", "dying", "death"
-        self.cancel_events(*events)
+        self._log = []
 
     def __repr__(self):
-        if self.name == "":
-            name = self.__class__.__name__
-        else:
-            name = self.name
-        n, i = name, self.id_num
+        n, i = self.name, self.id_num
+        cls = self.__class__.__name__
 
-        return "{} ({})".format(n, i)
+        return "{}: {} ({})".format(cls, n, i)
+
+    def log(self, message):
+        self._log.append(message)
+
+    def print(self):
+        for message in self._log:
+            print(message)
+
+        self._log.clear()
 
     @staticmethod
     def get_id():
-        n = ZsEntity.ID_NUM
-        ZsEntity.ID_NUM += 1
+        n = Entity.ID_NUM
+        Entity.ID_NUM += 1
 
         return n
 
@@ -220,7 +222,8 @@ class ZsEntity(ZsEventInterface):
 
     @property
     def image(self):
-        return self.graphics.get_image()
+        if self.graphics:
+            return self.graphics.get_image()
 
     @property
     def size(self):
@@ -246,10 +249,6 @@ class ZsEntity(ZsEventInterface):
     def height(self):
         return self.rect.height
 
-    @property
-    def states(self):
-        return self._state.states
-
     '''
     The adjust_size and adjust_position methods
     are called whenever the object's 'size' or
@@ -273,12 +272,28 @@ class ZsEntity(ZsEventInterface):
         y += dy
         self.position = x, y
 
+    def update(self):
+        if self.graphics:
+            self.graphics.update()
+
+        for method in self.get_update_methods():
+            try:
+                method()
+            except TypeError:
+                print("")
+
+    # ALL subclasses that overwrite this method
+    # should ALWAYS call the super() version and
+    # combine results before returning.
+    def get_update_methods(self):
+        return [self.event_handler.update]
+
     def get_state(self):
-        return self._state.state
+        return self.spawn_state
 
     def set_state(self, state):
         if state is not self.get_state():
-            self._state.set_state(state)
+            self.spawn_state = state
             name = "change_state"
             change_state = "{} state={}".format(name, state)
             self.handle_event(change_state)
@@ -289,18 +304,9 @@ class ZsEntity(ZsEventInterface):
     def set_visible(self, value):
         self.visible = value
 
-    def update(self, dt):
-        if self.graphics:
-            self.graphics.update()
-
-        for method in self.get_update_methods():
-            method(dt)
-
-    # ALL subclasses that overwrite this method
-    # should ALWAYS call the super() version and
-    # combine results before returning.
-    def get_update_methods(self):
-        return [self.event_handler.update]
+    def reset_transition_events(self):
+        events = "spawning", "birth", "dying", "death"
+        self.cancel_events(*events)
 
     def on_spawn(self):
         self.reset_transition_events()
@@ -311,10 +317,10 @@ class ZsEntity(ZsEventInterface):
         self.queue_events(spawning, "birth")
 
     def on_spawning(self):
-        self.set_state(ZsEntity.STATES[0])
+        self.set_state(Entity.STATES[0])
 
     def on_birth(self):
-        self.set_state(ZsEntity.STATES[1])
+        self.set_state(Entity.STATES[1])
 
     def on_die(self):
         self.reset_transition_events()
@@ -324,10 +330,10 @@ class ZsEntity(ZsEventInterface):
         self.queue_events(dying, "death")
 
     def on_dying(self):
-        self.set_state(ZsEntity.STATES[2])
+        self.set_state(Entity.STATES[2])
 
     def on_death(self):
-        self.set_state(ZsEntity.STATES[3])
+        self.set_state(Entity.STATES[3])
 
     def on_change_state(self):
         pass
@@ -336,7 +342,7 @@ class ZsEntity(ZsEventInterface):
         pass
 
 
-class Layer(ZsEntity):
+class Layer(Entity):
     """
     The Layer object contains Groups (from pygame.sprite) of ZsSprites
     that are updated, and then drawn, all from a main method. Layers can
@@ -355,6 +361,16 @@ class Layer(ZsEntity):
             for sprite in self._items:
                 sprite.update(*args)
 
+        def draw(self, screen, offset=(0, 0)):
+            for item in self:
+                x, y = item.position
+                x += offset[0]
+                y += offset[1]
+
+                image = item.image
+                if image and item.visible:
+                    screen.blit(image, (x, y))
+
         def add(self, item):
             self._items.append(item)
             item.groups.append(self)
@@ -363,7 +379,8 @@ class Layer(ZsEntity):
             item.groups = [g for g in item.groups if g is not self]
             self._items = [s for s in self._items if s is not item]
 
-    def __init__(self, name, size=SCREEN_SIZE, position=(0, 0), model=None, controllers=None):
+    def __init__(self, name, size=SCREEN_SIZE,
+                 position=(0, 0), model=None):
         super(Layer, self).__init__(name, size, position)
 
         self.transition_to = None
@@ -371,34 +388,19 @@ class Layer(ZsEntity):
         self.pause_layer = None
 
         self.game_environment = False
-        self.active = True
 
-        if controllers:
-            self.controllers = controllers
-        else:
-            self.controllers = []
+        self.controllers = []
         self.groups = []
         self.sub_layers = []
 
         self.model = Model(self.name + " model", model)
         self.add_event_methods("change_environment", "pause", "unpause")
 
-    def adjust_size(self, value):
-        self.rect.size = value
-
     # the populate method is meant to be overwritten by subclasses.
     # the PopulateMetaclass ensures that the populate() method is
     # called immediately after __init__ completes.
     def populate(self):
         pass
-
-    def on_spawn(self):
-        self.populate()
-        self.active = True
-
-        super(Layer, self).on_spawn()
-        for layer in self.sub_layers:
-            layer.handle_event("spawn")
 
     @property
     def paused(self):
@@ -418,10 +420,6 @@ class Layer(ZsEntity):
                 c.get_copy())
 
         self.controllers = new_controllers
-
-    @staticmethod
-    def make_group():
-        return Layer.Group()
 
     def get_value(self, name):
         return self.model.values.get(name, None)
@@ -457,20 +455,14 @@ class Layer(ZsEntity):
                      self.update_sub_layers,
                      self.model.update]
 
-    def update_groups(self, dt):
+    def update_groups(self):
         for group in self.groups:
-            group.update(dt)
+            group.update()
 
-    def update_sub_layers(self, dt):
+    def update_sub_layers(self):
         for layer in self.sub_layers:
             if layer.active:
-                layer.update(dt)
-
-    def get_sprite(self, name):
-        for group in self.groups:
-            for sprite in group:
-                if sprite.name == name:
-                    return sprite
+                layer.update()
 
     # the Layer object's rect attribute determines the region where the
     # layer will be drawn to the screen. Then all sub_layers are drawn
@@ -490,8 +482,7 @@ class Layer(ZsEntity):
 
         if self.groups:
             for g in self.groups:
-                self.draw_sprites(
-                    g, sub_screen, offset=offset)
+                g.draw(sub_screen, offset=offset)
 
         if self.sub_layers:
             for layer in self.sub_layers:
@@ -501,26 +492,12 @@ class Layer(ZsEntity):
 
         return sub_screen
 
-    @staticmethod
-    def draw_sprites(group, screen, offset=(0, 0)):
-        for sprite in group:
-            x, y = sprite.position
-            x += offset[0]
-            y += offset[1]
-            if hasattr(sprite, "graphics"):
-                image = sprite.graphics.get_image()
-                if image and sprite.visible:
-                    screen.blit(image, (x, y))
-
-            # if hasattr(sprite, "draw"):
-            #     sprite.draw(screen, offset)
-
     # the main() method is called by the Game object's main() method
     # each iteration of the loop (i.e. once per frame) if it is assigned
     # to the game's "environment" attribute.
-    def main(self, dt, screen):
+    def main(self, screen):
         self.handle_controller()
-        self.update(dt)
+        self.update()
         self.draw(screen)
 
     def on_change_environment(self):
@@ -556,6 +533,14 @@ class Layer(ZsEntity):
         print("returning {}".format(r))
         if r:
             self.set_value("_return", r)
+
+    def on_spawn(self):
+        self.populate()
+        self.active = True
+
+        super(Layer, self).on_spawn()
+        for layer in self.sub_layers:
+            layer.handle_event("spawn")
 
     def on_die(self):
         super(Layer, self).on_die()
@@ -593,10 +578,27 @@ class SpawnMetaclass(type):
         return n
 
 
-class ZsSprite(GroupsInterface, ZsEntity, metaclass=SpawnMetaclass):
+class GroupsInterface:
+    def __init__(self):
+        self.groups = []
+
+    def add(self, *groups):
+        for group in groups:
+            group.add(self)
+
+    def remove(self, *groups):
+        for group in groups:
+            group.remove(self)
+
+    def kill(self):
+        for g in self.groups:
+            self.remove(g)
+
+
+class Sprite(GroupsInterface, Entity, metaclass=SpawnMetaclass):
     def __init__(self, name, size=(1, 1), position=(0, 0)):
         GroupsInterface.__init__(self)
-        ZsEntity.__init__(self, name, size, position)
+        Entity.__init__(self, name, size, position)
 
         self.sub_sprites = []
         self.groups = []
@@ -618,31 +620,132 @@ class ZsSprite(GroupsInterface, ZsEntity, metaclass=SpawnMetaclass):
         self.set_rect_size_to_image()
 
     def on_die(self):
-        super(ZsSprite, self).on_die()
+        super(Sprite, self).on_die()
 
         for sprite in self.sub_sprites:
             sprite.handle_event("die")
 
     def on_spawn(self):
-        super(ZsSprite, self).on_spawn()
+        super(Sprite, self).on_spawn()
         group = self.event.get("group")
         if group:
             self.add(group)
 
     def on_death(self):
-        super(ZsSprite, self).on_death()
+        super(Sprite, self).on_death()
         self.remove(*self.groups)
 
     def add(self, *groups):
-        super(ZsSprite, self).add(*groups)
+        super(Sprite, self).add(*groups)
 
         for sprite in self.sub_sprites:
             sprite.add(*groups)
 
     def remove(self, *groups):
-        super(ZsSprite, self).remove(*groups)
+        super(Sprite, self).remove(*groups)
 
         for sprite in self.sub_sprites:
             sprite.remove(*groups)
 
 
+class Region(GroupsInterface, Entity):
+    WALL_COLOR = 255, 0, 255
+
+    def __init__(self, name, *points, size=(1, 1),
+                 position=(0, 0), **kwargs):
+
+        Entity.__init__(self, name, size=size,
+                        position=position)
+        GroupsInterface.__init__(self)
+        self.name = name
+        self.visible = True
+
+        self.walls = []
+        self.position = position
+
+        if points:
+            self.set_walls(points, **kwargs)
+
+    def set_walls(self, points, **kwargs):
+        self.walls = self.get_walls(points, **kwargs)
+
+    @staticmethod
+    def get_walls(points, ground_angle=0.0, orientation=True,
+                  offset=(0, 0), friction=None, closed=True):
+        if not orientation:
+            points = list(points)
+            points.reverse()
+            points = tuple(points)
+
+        def get_wall(p1, p2):
+            x1, y1 = p1
+            x2, y2 = p2
+            x1 += offset[0]
+            x2 += offset[0]
+            y2 += offset[1]
+            y2 += offset[1]
+
+            return Wall((x1, y1), (x2, y2),
+                        friction=friction)
+
+        last = None
+        walls = []
+        for point in points:
+            if last:
+                walls.append(get_wall(last, point))
+
+            last = point
+        if closed:
+            walls.append(get_wall(last, points[0]))
+
+        for w in walls:
+            angle = w.get_angle()
+            w.ground = angle <= ground_angle or angle >= 1 - ground_angle
+
+        return walls
+
+    def draw_walls(self, screen, offset=(0, 0)):
+        for wall in self.walls:
+            wall.draw(
+                screen, offset=offset,
+                color=self.WALL_COLOR)
+
+    def get_collision_system(self, items, check, handle):
+        cs = CollisionSystem(
+            check, handle,
+            "group", self.walls, items
+        )
+
+        return cs
+
+    def get_sprite_collision_system(self, group, handle):
+        return self.get_collision_system(
+            group, Wall.sprite_collision,
+            handle)
+
+    def get_vector_collision_system(self, vectors, handle):
+        return self.get_collision_system(
+            vectors, Wall.vector_collision, handle
+        )
+
+    def get_smooth_sprite_collision_system(self, group):
+        return self.get_sprite_collision_system(
+            group, Wall.handle_collision_smooth
+        )
+
+    def get_mirror_sprite_collision_system(self, group):
+        return self.get_sprite_collision_system(
+            group, Wall.handle_collision_mirror
+        )
+
+
+class RectRegion(Region):
+    def __init__(self, name, size, position, **kwargs):
+        rect = Rect(size, position)
+
+        points = (rect.bottomleft, rect.topleft,
+                  rect.topright, rect.bottomright)
+
+        super(RectRegion, self).__init__(
+            name, *points, position=position,
+            **kwargs)

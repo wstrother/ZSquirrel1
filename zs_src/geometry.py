@@ -4,29 +4,11 @@ import pygame
 from pygame import draw
 
 
-class GroupsInterface:
-    def __init__(self):
-        self.groups = []
-
-    def add(self, *groups):
-        for group in groups:
-            group.add(self)
-
-    def remove(self, *groups):
-        for group in groups:
-            group.remove(self)
-
-    def kill(self):
-        for g in self.groups:
-            self.remove(g)
-
-
-class Vector(GroupsInterface):
+class Vector:
     VECTOR_COLOR = 255, 255, 255
     DRAW_WIDTH = 5
 
     def __init__(self, name, i_hat, j_hat):
-        super(Vector, self).__init__()
         self.origin = 0, 0
 
         self.name = name
@@ -490,114 +472,19 @@ class Wall(Vector):
             normal.draw(screen, offset=start_n, color=color)
 
 
-class Region(GroupsInterface):
-    WALL_COLOR = 255, 0, 255
+class Rect:
+    RECT_COLOR = 0, 255, 125
 
-    def __init__(self, name, *points, position=(0, 0), **kwargs):
-        super(Region, self).__init__()
-        self.name = name
-        self.visible = True
-
-        self.walls = []
-        self.position = position
-        if points:
-            self.set_walls(points, **kwargs)
-
-    def set_walls(self, points, **kwargs):
-        self.walls = self.get_walls(points, **kwargs)
-
-    @staticmethod
-    def get_walls(points, ground_angle=0.0, orientation=True,
-                  offset=(0, 0), friction=None, closed=True):
-        if not orientation:
-            points = list(points)
-            points.reverse()
-            points = tuple(points)
-
-        def get_wall(p1, p2):
-            x1, y1 = p1
-            x2, y2 = p2
-            x1 += offset[0]
-            x2 += offset[0]
-            y2 += offset[1]
-            y2 += offset[1]
-
-            return Wall((x1, y1), (x2, y2),
-                        friction=friction)
-
-        last = None
-        walls = []
-        for point in points:
-            if last:
-                walls.append(get_wall(last, point))
-
-            last = point
-        if closed:
-            walls.append(get_wall(last, points[0]))
-
-        for w in walls:
-            angle = w.get_angle()
-            w.ground = angle <= ground_angle or angle >= 1 - ground_angle
-
-        return walls
-
-    def draw(self, screen, offset=(0, 0)):
-        for wall in self.walls:
-            wall.draw(screen, offset=offset,
-                      color=self.WALL_COLOR)
-
-    def update(self, dt):
-        pass
-
-    def get_collision_system(self, items, check_collision, handle_collision):
-        def collision_system():
-            for item in items:
-                for wall in self.walls:
-                    if check_collision(item, wall):
-                        handle_collision(item, wall)
-
-        return collision_system
-
-    def get_sprite_collision_system(self, group, handle_collision):
-        return self.get_collision_system(
-            group, Wall.sprite_collision,
-            handle_collision)
-
-    def get_vector_collision_system(self, vectors, handle_collision):
-        return self.get_collision_system(
-            vectors, Wall.vector_collision, handle_collision
-        )
-
-    def get_smooth_sprite_collision_system(self, group):
-        return self.get_sprite_collision_system(
-            group, Wall.handle_collision_smooth
-        )
-
-    def get_mirror_sprite_collision_system(self, group):
-        return self.get_sprite_collision_system(
-            group, Wall.handle_collision_mirror
-        )
-
-
-class RectRegion(Region):
-    def __init__(self, name, size, position, **kwargs):
+    def __init__(self, size, position):
         self.size = size
         self.position = position
 
-        points = (self.bottomleft, self.topleft,
-                  self.topright, self.bottomright)
-
-        super(RectRegion, self).__init__(
-            name, *points, position=position,
-            **kwargs
-        )
-
     def __repr__(self):
-        return "{}: {}, {}".format(self.name, self.size, self.position)
+        return "Rect: {}, {}".format(self.size, self.position)
 
     def draw(self, screen, offset=(0, 0)):
         r = self.pygame_rect
-        color = self.WALL_COLOR
+        color = self.RECT_COLOR
 
         r.x += offset[0]
         r.y += offset[1]

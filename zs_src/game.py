@@ -40,7 +40,8 @@ class Game:
         environment = self.environment
 
         self.screen.fill((0, 0, 0))
-        environment.main(dt, self.screen)
+        environment.set_value("_dt", dt)
+        environment.main(self.screen)
 
         t = environment.transition_to
         if t:

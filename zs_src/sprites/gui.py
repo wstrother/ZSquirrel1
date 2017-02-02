@@ -1,12 +1,12 @@
 from zs_constants import gui as constants
 from zs_constants.style import L, C, R, T, B
 from zs_src.classes import MemberTable
-from zs_src.entities import ZsSprite
+from zs_src.entities import Sprite
 from zs_src.graphics import ContainerGraphics, TextGraphics
 from zs_src.style import StyleInterface
 
 
-class GuiSprite(StyleInterface, ZsSprite):
+class GuiSprite(StyleInterface, Sprite):
     EVENT_NAMES = ("change_position", "change_size")
 
     def __init__(self, name, **kwargs):
@@ -14,7 +14,7 @@ class GuiSprite(StyleInterface, ZsSprite):
 
         size = kwargs.get("size", (1, 1))
         position = kwargs.get("position", (0, 0))
-        ZsSprite.__init__(self, name, size=size, position=position)
+        Sprite.__init__(self, name, size=size, position=position)
 
         style_dict = kwargs.get("style_dict")
         if style_dict:

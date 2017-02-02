@@ -71,6 +71,7 @@ class Event:
     @staticmethod
     def string_to_number(s):
         try:
+            print(s)
             num = float(s)
             if num.is_integer():
                 num = int(num)
@@ -433,11 +434,11 @@ class EventHandler:
     def handle_action(self, action):
         self.clock.add_timers(action)
 
-    def update(self, dt):
-        self.clock.tick(dt)
+    def update(self):
+        self.clock.tick()
 
 
-class ZsEventInterface:
+class EventInterface:
     """
     The ZsEventInterface is a parent class used to provide an API frontend
     for using the zs_src.events module without directly importing the classes.

@@ -1,5 +1,6 @@
-from zs_src.events import Event, Action, EventListener, EventHandler, ZsEventInterface
 from random import seed, randint, random
+
+from zs_src.events import Event, Action, EventHandler, EventInterface
 from zs_tests.zs_unit_test import ZsUnitTest
 
 
@@ -436,10 +437,10 @@ class ZsEventInterfaceUnitTest(EventHandlerUnitTest):
 
     def do_tests(self, r=5):
         l = self.log
-        l("!s", ZsEventInterface)
+        l("!s", EventInterface)
         seed(r)
 
-        ei = ZsEventInterface("test interface")
+        ei = EventInterface("test interface")
         eh = self.MockEventHandler()
         ei.event_handler = eh
 
@@ -478,7 +479,7 @@ class ZsEventInterfaceUnitTest(EventHandlerUnitTest):
         l = self.log
         l("!m", self.test_event_listener_methods)
 
-        ei = ZsEventInterface("test interface")
+        ei = EventInterface("test interface")
         eh = self.MockEventHandler()
         ei.event_handler = eh
 
