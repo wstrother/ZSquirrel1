@@ -7,7 +7,7 @@ class RegionLayer(Layer):
     def __init__(self, *args, **kwargs):
         super(RegionLayer, self).__init__(*args, **kwargs)
 
-        self.walls_visible = True
+        self.walls_visible = False
 
     @staticmethod
     def get_walls(group):

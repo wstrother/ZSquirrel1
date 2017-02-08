@@ -328,22 +328,6 @@ class CameraLayer(Layer):
             "Toggle window visibility": toggle_visible,
             "Toggle visibility": lambda: self.set_visible(not self.visible)
         }
-        # self._positions = CacheList(2)
-        # self._positions.append((0, 0))
-
-    def set_up_windows(self, *windows):
-        for w in windows:
-            name, args = w
-            self.camera_windows[name] = self.camera.make_window(
-                *args
-            )
-
-    def set_anchor(self, value, vertical=True):
-        if not vertical:
-            self.camera.anchor = value, 0
-
-        else:
-            self.camera.anchor = 0, value
 
     def update(self):
         super(CameraLayer, self).update()
@@ -477,6 +461,17 @@ class CameraLayer(Layer):
         if angle == .25 or angle == .75:
             camera.velocity.i_hat = 0
 
+    def add_window(self, name, args):
+        self.camera_windows[name] = self.camera.make_window(
+            *args)
+
+    def set_anchor(self, value, vertical=True):
+        if not vertical:
+            self.camera.anchor = value, 0
+
+        else:
+            self.camera.anchor = 0, value
+
     def set_camera_bounds_region(self, size, position=(0, 0),
                                  orientation=False, **kwargs):
         region = RectRegion(
@@ -522,10 +517,11 @@ class CameraLayer(Layer):
 
         self.track_functions.append(set_camera)
 
-    def set_sprite_window_track(self, sprite, name, rate):
+    def set_sprite_window_track(self, name, sprite, rate):
         window = self.camera_windows[name]
 
         def set_camera():
+            print(rate)
             point = sprite.collision_point
             self.camera.window_track(
                 window, point, rate
@@ -535,11 +531,17 @@ class CameraLayer(Layer):
 
         self.track_functions.append(set_camera)
 
-    def set_anchor_track_function(self, get_point, check_func, rate):
+    def set_anchor_track_function(self, get_anchor, rate):
         def track_anchor():
-            if check_func():
+            xa, ya = self.camera.anchor
+            value = get_anchor()
+            if value:
+                if not xa:
+                    xa = value
+                if not ya:
+                    ya = value
                 self.camera.anchor_track(
-                    get_point(), rate
+                    (xa, ya), rate
                 )
 
         self.track_functions.append(track_anchor)
@@ -548,19 +550,30 @@ class CameraLayer(Layer):
         meter = Meter("span", span[0], span[1], span[0])
 
         def set_anchor():
-            meter.value = get_position()
+            meter.value = meter.minimum + get_position()
             self.set_anchor(meter.value, vertical)
 
         self.track_functions.append(set_anchor)
 
-    def track_window_to_sprite_heading(self, sprite, name, rate):
+    @staticmethod
+    def vertical_position_track(camera, span_min, span_max):
+        span = span_max - span_min
+        x, y = camera.position
+        r = (y + span_min) / span_max
+
+        return r * span
+
+    @staticmethod
+    def ground_track(sprite):
+        if sprite.is_grounded:
+            return sprite.get_ground_anchor()
+
+    def track_window_to_sprite_heading(self, name, sprite, rate):
         window = self.camera_windows[name]
 
         def set_heading():
             velocity = sprite.velocity.get_value()
-            # direction = sprite.direction
             vx, vy = velocity
-            # dx, dy = direction
 
             left = vx < 1
             right = vx > 1
@@ -577,11 +590,11 @@ class CameraLayer(Layer):
 
         self.track_functions.append(set_heading)
 
-    def set_scale_tracking_function(self, get_scale, span):
+    def set_scale_track_function(self, get_scale, span):
         meter = Meter("span", span[0], span[0], span[1])
 
         def set_scale():
-            meter.value = get_scale()
+            meter.value = meter.minimum + get_scale()
             self.camera.scale = round(meter.value, 3)
 
         self.track_functions.append(set_scale)
@@ -626,9 +639,10 @@ class CameraLayer(Layer):
 
 
 class ParallaxBgLayer(Layer):
-    def __init__(self, image, scale, buffer=(0, 0), wrap=(False, False), **kwargs):
+    def __init__(self, image_name, scale, buffer=(0, 0), wrap=(False, False), **kwargs):
         super(ParallaxBgLayer, self).__init__("bg layer", **kwargs)
 
+        image = self.get_bg_image(image_name)
         self.set_up_graphics(image, buffer)
 
         self.scale = scale

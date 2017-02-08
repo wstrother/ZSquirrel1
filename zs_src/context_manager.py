@@ -5,9 +5,9 @@ from types import FunctionType, MethodType
 
 from zs_constants.paths import CONFIG
 from zs_constants.sprite_demo import GRAVITY, COF
-from zs_src.camera import CameraLayer, ParallaxBgLayer
 from zs_src.controller import Command, Step
 from zs_src.events import Event
+from zs_src.layers.camera import CameraLayer, ParallaxBgLayer
 from zs_src.layers.physics import PhysicsLayer
 from zs_src.layers.regions import RegionLayer
 from zs_src.regions.platforms import TreePlat
@@ -22,10 +22,13 @@ class ContextManager:
     def __init__(self, env):
         self.environment = env
         self.layers_dict = None
+        self.bg_layers_dict = None
         self.command_dict = None
         self.items_dict = None
         self.collision_systems = None
         self.huds_dict = None
+        self.camera_windows = None
+        self.camera_dict = None
         self.groups_dict = {}
 
         file = open(join(CONFIG, env.file_name + ".cfg"), "r")
@@ -90,6 +93,10 @@ class ContextManager:
             self.layers_dict = self.set_up_dict(
                 d["layers"])
 
+        if d.get("bg_layers"):
+            self.bg_layers_dict = self.set_up_dict(
+                d["bg_layers"])
+
         if d.get("commands"):
             self.command_dict = self.set_up_command_dict(
                 d["commands"])
@@ -109,6 +116,14 @@ class ContextManager:
         if d.get("groups"):
             for group in d.get("groups"):
                 self.groups_dict[group] = self.environment.Group()
+
+        if d.get("camera_windows"):
+            self.camera_windows = self.set_up_dict(
+                d.get("camera_windows"))
+
+        if d.get("camera"):
+            self.camera_dict = self.set_up_dict(
+                d.get("camera"))
 
     @staticmethod
     def set_up_dict(section):
@@ -191,13 +206,54 @@ class ContextManager:
             COLLISIONS_DICT[name](*args)
 
     def set_up_camera(self):
-        for name in self.layers_dict:
-            ld = self.layers_dict[name]
-            if "camera" in ld:
-                layer = ld["layer"]
-                CONTEXT_DICT[ld["camera"]](
-                    layer, self.environment
-                )
+        env = self.environment
+
+        for name in self.camera_windows:
+            wd = self.camera_windows[name]
+            layer = env.get_layer(wd.get(
+                "layer", "Camera Layer"))
+
+            args = (
+                wd.get("window_size"),
+                wd.get("shift"),
+                wd.get("offset", (0, 0))
+            )
+            layer.add_window(name, args)
+
+            for arg_name in wd:
+                if arg_name in ("track_sprite", "track_sprite_heading"):
+                    args = list(wd[arg_name])
+                    i = 0
+                    for arg in args:
+                        if type(arg) is str:
+                            args[i] = env.get_value(arg)
+                        i += 1
+
+                    print("ARGS", args)
+                    CAMERA_DICT[arg_name](layer, name, *args)
+
+        for name in self.camera_dict:
+            cd = self.camera_dict[name]
+            args = [
+                cd[n] for n in cd.keys() if n not in ("func", "layer")
+            ]
+            layer = env.get_layer(cd.get(
+                "layer", "Camera Layer"))
+
+            if "func" in cd:
+                func, fargs = cd["func"][0], list(cd["func"][1:])
+                func = CAMERA_DICT[func]
+
+                i = 0
+                for arg in fargs:
+                    if type(arg) is str:
+                        fargs[i] = env.get_value(arg)
+                    i += 1
+
+                CAMERA_DICT[name](layer, lambda: func(*fargs), *args)
+
+            else:
+                CAMERA_DICT[name](layer, *args)
 
     def set_up_huds(self):
         for name in self.layers_dict:
@@ -257,14 +313,14 @@ class ContextManager:
         env = self.environment
         ld = self.layers_dict[name]
 
-        if name in ("Pause Menu", "Debug Layer"):
+        if ld.get("environment"):
             layer = CONTEXT_DICT[name](env)
         else:
             layer = CONTEXT_DICT[name]()
 
         ld["layer"] = layer
 
-        if name == "Pause Menu":
+        if ld.get("pause_menu"):
             env.set_value("pause_menu", layer)
 
         else:
@@ -276,6 +332,10 @@ class ContextManager:
             else:
                 env.add_sub_layer(
                     layer)
+
+        if ld.get("camera"):
+            env.set_value(
+                "Camera", layer.camera)
 
         if ld.get("groups"):
             groups = [env.get_group(g) for g in ld.get("groups")]
@@ -300,8 +360,23 @@ class ContextManager:
 
         # ADD TO LAYER DICT
         if ld.get("bg_layers"):
-            for bg_layer in ld.get("bg_layers"):
-                layer.bg_layers = CONTEXT_DICT[bg_layer]()
+            for name in ld.get("bg_layers"):
+                bg = self.bg_layers_dict[name]
+                cls = bg.get("class")
+                if not cls:
+                    cls = "Parallax Bg Layer"
+                image = bg["image"]
+                scale = bg["scale"]
+                args = (image, scale)
+                kwargs = {
+                    "position": bg["position"],
+                    "wrap": bg["wrap"],
+                    "buffer": bg["buffer"]
+                }
+
+                bg_layer = CONTEXT_DICT[cls](
+                    *args, **kwargs)
+                layer.bg_layers.append(bg_layer)
 
     def load_item(self, name, *args, **kwargs):
         d = self.items_dict[name]
@@ -352,87 +427,61 @@ class ContextManager:
         item.set_controller(controller)
 
 
-def sprite_demo_camera(layer, environment):
-    player = environment.get_value("Player")
-
-    w1 = ("slow_push", [(300, 350), (300, 150), (0, 0)])
-    w2 = ("fast_push", [(400, 500), (550, 0), (0, -100)])
-
-    # BUILD CAMERA WINDOWS
-    layer.set_up_windows(w1, w2)
-
-    # TRACK CAMERA FUNCTION
-    layer.set_sprite_window_track(
-        player, "slow_push", .08)
-    layer.set_sprite_window_track(
-        player, "fast_push", .5)
-    layer.track_window_to_sprite_heading(
-        player, "slow_push", 1.5)
-    layer.track_window_to_sprite_heading(
-        player, "fast_push", .5)
-
-    # TRACK ANCHOR FUNCTION
-    layer.set_anchor_track_function(
-        lambda: player.get_ground_anchor(),
-        lambda: player.is_grounded(), .05
-    )
-
-    layer.set_anchor(450)
-    a_min = 450
-    a_max = 550
-
-    def get_position():
-        span = a_max - a_min
-        x, y = layer.camera.position
-        r = y / 600
-        value = r * span
-
-        return value + 450
-
-    layer.set_anchor_position_function(
-        get_position, (a_min, a_max)
-    )
-
-    layer.set_camera_bounds_edge(900)
-
-    def get_scale():
-        camera = layer.camera
-        y = camera.focus_point[1]
-        scale = round(
-            1 + ((y + 500) / 900), 3)
-
-        return scale
-
-    layer.set_scale_tracking_function(
-        get_scale, (1, 2)
-    )
-
-
-def sprite_demo_trees():
-    trees = "smalltree", "midtree", "bigtree"
-    get = ParallaxBgLayer.get_bg_image
-
-    def get_scale(name):
-        full_w = get("bigtree.gif").get_size()[0]
-        w = get(name).get_size()[0]
-
-        return w / full_w
-
-    bg_layers = []
-    for tree in trees:
-        scale = get_scale(tree + ".gif")
-        offset = 25
-        depth = 60
-        position = 0, (((depth * scale) + offset) * scale) + offset
-
-        bg_layers.append(ParallaxBgLayer(
-            get(tree + ".gif"), scale,
-            buffer=(50, 0), wrap=(True, False),
-            position=position)
-        )
-
-    return bg_layers
-
+# def sprite_demo_camera(layer, environment):
+#     player = environment.get_value("Player")
+#
+#     w1 = ("slow_push", [(300, 350), (300, 150), (0, 0)])
+#     w2 = ("fast_push", [(400, 500), (550, 0), (0, -100)])
+#
+#     # BUILD CAMERA WINDOWS
+#     layer.set_up_windows(w1, w2)
+#
+#     # TRACK CAMERA FUNCTION
+#     layer.set_sprite_window_track(
+#         player, "slow_push", .08)
+#     layer.set_sprite_window_track(
+#         player, "fast_push", .5)
+#     layer.track_window_to_sprite_heading(
+#         player, "slow_push", 1.5)
+#     layer.track_window_to_sprite_heading(
+#         player, "fast_push", .5)
+#
+#     # TRACK ANCHOR FUNCTION
+#     layer.set_anchor_track_function(
+#         lambda: player.get_ground_anchor(),
+#         lambda: player.is_grounded(), .05
+#     )
+#
+#     layer.set_anchor(450)
+#     a_min = 450
+#     a_max = 550
+#
+#     def get_position():
+#         span = a_max - a_min
+#         x, y = layer.camera.position
+#         r = y / 600
+#         value = r * span
+#
+#         return value + 450
+#
+#     layer.set_anchor_position_function(
+#         get_position, (a_min, a_max)
+#     )
+#
+#     layer.set_camera_bounds_edge(900)
+#
+#     def get_scale():
+#         camera = layer.camera
+#         y = camera.focus_point[1]
+#         scale = round(
+#             1 + ((y + 500) / 900), 3)
+#
+#         return scale
+#
+#     layer.set_scale_track_function(
+#         get_scale, (1, 2)
+#     )
+#
 
 CONTEXT_DICT = {
     "Sprite Layer": lambda: PhysicsLayer(
@@ -457,9 +506,29 @@ CONTEXT_DICT = {
     "Camera Layer": lambda: CameraLayer(
         "Camera Layer"),
 
-    "sprite_demo_camera": sprite_demo_camera,
+    "Parallax Bg Layer": lambda *args, **kwargs: ParallaxBgLayer(
+        *args, **kwargs),
+}
 
-    "sprite_demo_trees": sprite_demo_trees,
+
+CAMERA_DICT = {
+    "track_sprite": CameraLayer.set_sprite_window_track,
+
+    "track_sprite_heading": CameraLayer.track_window_to_sprite_heading,
+
+    "ground_track": CameraLayer.ground_track,
+
+    "vertical_position_track": CameraLayer.vertical_position_track,
+
+    "anchor_track_function": CameraLayer.set_anchor_track_function,
+
+    "anchor_position_function": CameraLayer.set_anchor_position_function,
+
+    "bounds_edge": CameraLayer.set_camera_bounds_edge,
+
+    "bounds_region": CameraLayer.set_camera_bounds_region,
+
+    "scale_track_function": CameraLayer.set_scale_track_function
 }
 
 

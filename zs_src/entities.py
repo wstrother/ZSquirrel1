@@ -277,10 +277,7 @@ class Entity(EventInterface):
             self.graphics.update()
 
         for method in self.get_update_methods():
-            try:
-                method()
-            except TypeError:
-                print("")
+            method()
 
     # ALL subclasses that overwrite this method
     # should ALWAYS call the super() version and
