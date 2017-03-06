@@ -29,9 +29,10 @@ class ContextManager:
         self.huds_dict = None
         self.camera_windows = None
         self.camera_dict = None
+        self.populate_dict = None
         self.groups_dict = {}
 
-        file = open(join(CONFIG, env.file_name + ".cfg"), "r")
+        file = open(join(CONFIG, env.file_name), "r")
         lines = [line for line in file if line != "\n"]
         file.close()
 
@@ -125,6 +126,10 @@ class ContextManager:
             self.camera_dict = self.set_up_dict(
                 d.get("camera"))
 
+        if d.get("populate"):
+            self.populate_dict = self.set_up_populate(
+                d.get("populate"))
+
     @staticmethod
     def set_up_dict(section):
         d = OrderedDict()
@@ -167,6 +172,32 @@ class ContextManager:
 
                 ld[key] = value
             d[name] = ld
+
+        return d
+
+    @staticmethod
+    def set_up_populate(section):
+        d = OrderedDict()
+        names = []
+        current = ""
+
+        sub_section = []
+        for line in section:
+            if not line[0] == "\t":
+                if names:
+                    d[current].append(
+                        ContextManager.set_up_dict(
+                            sub_section)['']
+                    )
+                    sub_section = []
+
+                if line not in names:
+                    current = line
+                    names.append(line)
+                    d[line] = []
+
+            else:
+                sub_section.append(line)
 
         return d
 
@@ -426,6 +457,23 @@ class ContextManager:
 
         item.set_controller(controller)
 
+    def populate(self):
+        env = self.environment
+
+        for key in self.populate_dict:
+            items = self.populate_dict[key]
+
+            for item_d in items:
+                args = item_d.get("args", [])
+                if args:
+                    item_d.pop("args")
+
+                name = key.split(" = ")[-1]
+                item = self.load_item(name, *args, **item_d)
+
+                if " = " in key:
+                    rhs, lhs = key.split(" = ")
+                    env.set_value(rhs, item)
 
 # def sprite_demo_camera(layer, environment):
 #     player = environment.get_value("Player")

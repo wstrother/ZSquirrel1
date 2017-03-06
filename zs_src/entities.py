@@ -393,12 +393,6 @@ class Layer(Entity):
         self.model = Model(self.name + " model", model)
         self.add_event_methods("change_environment", "pause", "unpause")
 
-    # the populate method is meant to be overwritten by subclasses.
-    # the PopulateMetaclass ensures that the populate() method is
-    # called immediately after __init__ completes.
-    def populate(self):
-        pass
-
     @property
     def paused(self):
         return bool(self.pause_layer)
@@ -532,7 +526,6 @@ class Layer(Entity):
             self.set_value("_return", r)
 
     def on_spawn(self):
-        self.populate()
         self.active = True
 
         super(Layer, self).on_spawn()

@@ -49,11 +49,12 @@ class ContextLayer(Layer):
             self.context.load_layer(name)
 
         self.set_up_model()
-        super(ContextLayer, self).on_spawn()
 
+        self.context.populate()
         self.context.set_up_camera()
         self.context.set_up_huds()
         self.context.reset_controllers()
+        super(ContextLayer, self).on_spawn()
 
     def on_pause(self):
         layer = self.get_value("pause_menu")
@@ -93,5 +94,5 @@ class PauseMenuLayer(ContextLayer):
             self.set_value("frame_advance_pause",
                            frame_pause)
 
-        super(ContextLayer, self).handle_controller()
+        super(PauseMenuLayer, self).handle_controller()
 

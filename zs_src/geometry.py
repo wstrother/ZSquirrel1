@@ -201,17 +201,6 @@ class Vector:
         return self.get_transformation_vector(
             i, j).get_value()
 
-    # def scale_in_direction(self, angle, scalar):
-    #     i, j = self.get_basis_vectors(angle)
-    #     a, c = i.get_value()
-    #     b, d = j.get_value()
-    #
-    #     a, c = .25, 25
-    #     b, d = .25, .25
-    #
-    #     self.i_hat = (a * x) + (b * y)
-    #     self.j_hat = (c * x) + (d * y)
-
     def matrix_multiplication(self, basis_i, basis_j):
         x, y = self.get_value()
         a, c = basis_i.get_value()

@@ -65,7 +65,7 @@ class PlatformGraphics(Graphics):
 
 
 class TreePlat(Region):
-    def __init__(self, length, angle=0.0, origin=(0, 0), **kwargs):
+    def __init__(self, length=1, angle=0.0, origin=(0, 0), **kwargs):
         width = PlatformGraphics.get_px_width(length)
         ox, oy = origin
         wall = Wall(origin, (ox + width, oy), **kwargs)

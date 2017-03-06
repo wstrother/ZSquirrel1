@@ -474,6 +474,7 @@ class PauseMenu(Menu):
                     target = pause_layer
                 else:
                     target = self
+
                 if not live_key(target):
                     target.handle_event("die")
 
@@ -484,7 +485,7 @@ class PauseMenu(Menu):
                 #     if not self.control_freeze:
                 #         self.handle_event("die")
 
-    def populate(self):
+    def on_spawn(self):
         tools = self.tools
 
         mb = tools.make_main_block(position=(200, 200),
@@ -511,6 +512,8 @@ class PauseMenu(Menu):
             self.add_layer_options(mb, interface_layers)
 
         self.add_exit_option(mb)
+
+        super(PauseMenu, self).on_spawn()
 
     def add_frame_advance_option(self, mb):
         tools = self.tools
