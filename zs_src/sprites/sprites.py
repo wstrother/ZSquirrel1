@@ -1,8 +1,10 @@
 from zs_constants.gui import UP, DOWN, LEFT, RIGHT
+from zs_constants.paths import IMAGES
 from zs_constants.sprite_demo import MASS, ELAST
 from zs_src.animations import AnimationGraphics, LeftRightGraphics
 from zs_src.classes import Meter, ChargeMeter
 from zs_src.entities import Sprite
+from zs_src.graphics import IconGraphics
 from zs_src.layers.physics import PhysicsInterface
 from zs_src.resource_library import get_resources
 
@@ -68,7 +70,6 @@ class CharacterSprite(PhysicsInterface, AnimationSprite):
         AnimationSprite.__init__(self, name, **kwargs)
         PhysicsInterface.__init__(self, mass, elasticity)
 
-        self.controller = None
         self.adjust_position(self.rect.topleft)
 
         self.meters = {}
@@ -80,9 +81,6 @@ class CharacterSprite(PhysicsInterface, AnimationSprite):
             meter = ChargeMeter(name, value, *args)
 
         self.meters[name] = meter
-
-    def set_controller(self, controller):
-        self.controller = controller
 
     def get_direction_string(self):
         return {
@@ -241,3 +239,12 @@ class DemoSprite(CharacterSprite):
 
             move = self.get_ground_vector(dx)
             self.apply_force(move)
+
+
+class CursorSprite(Sprite):
+    BASE_MOVEMENT = 5
+
+    def __init__(self, name, file_name, **kwargs):
+        super(CursorSprite, self).__init__(name, **kwargs)
+        image = IconGraphics.load_image(IMAGES, file_name)
+        self.graphics = IconGraphics(self, image)

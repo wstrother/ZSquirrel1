@@ -132,7 +132,7 @@ class ContainerSprite(GuiSprite):
             sprite.parent = self
 
             for group in self.groups:
-                sprite.add(group)
+                sprite.add_to(group)
         self.handle_event("change_member_size")
 
     def set_table(self, members=None):
@@ -242,17 +242,17 @@ class ContainerSprite(GuiSprite):
         if self.size != old and self.graphics:
             self.graphics.change_size()
 
-    def add(self, *groups):
-        super(ContainerSprite, self).add(*groups)
+    def add_to(self, *groups):
+        super(ContainerSprite, self).add_to(*groups)
 
         for sprite in self.member_list:
-            sprite.add(*groups)
+            sprite.add_to(*groups)
 
-    def remove(self, *groups):
-        super(ContainerSprite, self).remove(*groups)
+    def remove_from(self, *groups):
+        super(ContainerSprite, self).remove_from(*groups)
 
         for sprite in self.member_list:
-            sprite.remove(*groups)
+            sprite.remove_from(*groups)
 
     def kill(self):
         super(ContainerSprite, self).kill()

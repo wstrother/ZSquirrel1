@@ -492,7 +492,7 @@ class PauseMenu(Menu):
                                    size=(300, 0))
 
         def in_model(name):
-            return name in self.model.values
+            return (name in self.model.values) and (self.model.values[name])
 
         self.add_controller_option(mb)
 
@@ -621,14 +621,14 @@ class PauseMenu(Menu):
         return block
 
     def get_spawn_sub_block(self):
-        sprite_dict = self.get_value("items_dict")
+        items_dict = self.get_value("items_dict")
         tools = self.tools
         x, y = self.main_block.position
         x += self.main_block.size[0]
         to, fo = tools.TextOption, tools.TextFieldOption
 
         sprite_option = tools.SwitchOption(
-            list(sprite_dict.keys()))
+            list(items_dict.keys()))
 
         x_option = fo("0", 4)
         y_option = fo("0", 4)
@@ -706,11 +706,9 @@ class PauseMenu(Menu):
 class DebugLayer(HeadsUpDisplay):
     ANIMATION_MACHINE_MAX = 5
 
-    def __init__(self, environment, **kwargs):
+    def __init__(self, **kwargs):
         super(DebugLayer, self).__init__("Debug Layer", **kwargs)
-        self.environment = environment
-        self.model = environment.model
-        self.visible = False
+        # self.visible = False
 
         def toggle_visible():
             self.visible = not self.visible
@@ -732,13 +730,15 @@ class DebugLayer(HeadsUpDisplay):
             size=(w, 0), table_style="cutoff {}".format(cutoff),
             position=(25, 0)
         )
-        block.add(self.hud_group)
+        block.style = {"align_h": "c"}
+        block.add_to(self.hud_group)
         block.visible = False
         self.hud_table = block
 
-    def add_hud_box(self, name, obj, fields, interval=5):
+    def add_hud(self, name, obj, fields, interval=5):
         self.hud_table.add_member_sprite(
-            HudBox(name, obj, fields, interval)
+            HudBox(name, obj, fields,
+                   interval=interval)
         )
 
     def update(self):
@@ -774,8 +774,8 @@ class HudBox(ContainerSprite):
 
 class HudField(TextSprite):
     L_STR = "{:>10}: {:^10}"
-    T_STR = "({:3.1f}, {:3.1f})"
-    F_STR = "{:3.1f}"
+    T_STR = "({:3.3f}, {:3.3f})"
+    F_STR = "{:3.3f}"
 
     def __init__(self, obj, field, **kwargs):
         super(HudField, self).__init__("", **kwargs)
@@ -787,6 +787,7 @@ class HudField(TextSprite):
         value_name = field[0]
         func = field[1]
         lhs = value_name
+        get_text = None
 
         if len(field) == 2:
             def get_text():
@@ -806,8 +807,13 @@ class HudField(TextSprite):
                     return self.get_f_text(
                         lhs, self.cache[-1])
 
-            # if field[2] == "changes":
-            else:
+            elif field[2] == "raw":
+                def get_text():
+                    value = func(obj)
+
+                    return value
+
+            elif field[2] == "changes":
                 self.cache = ChangeCache(field[3])
 
                 def get_text():

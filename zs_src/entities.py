@@ -262,7 +262,6 @@ class Entity(EventInterface):
         self.rect.size = value
 
     def adjust_position(self, value):
-        # self.rect.topleft = value
         self.rect.position = value
 
     def move(self, value):
@@ -300,6 +299,9 @@ class Entity(EventInterface):
 
     def set_visible(self, value):
         self.visible = value
+
+    def set_controller(self, controller):
+        self.controller = controller
 
     def reset_transition_events(self):
         events = "spawning", "birth", "dying", "death"
@@ -355,8 +357,8 @@ class Layer(Entity):
             return iter(self._items)
 
         def update(self, *args):
-            for sprite in self._items:
-                sprite.update(*args)
+            for item in self._items:
+                item.update(*args)
 
         def draw(self, screen, offset=(0, 0)):
             for item in self:
@@ -368,11 +370,12 @@ class Layer(Entity):
                 if image and item.visible:
                     screen.blit(image, (x, y))
 
-        def add(self, item):
-            self._items.append(item)
-            item.groups.append(self)
+        def add_item(self, *items):
+            for item in items:
+                self._items.append(item)
+                item.groups.append(self)
 
-        def remove(self, item):
+        def remove_item(self, item):
             item.groups = [g for g in item.groups if g is not self]
             self._items = [s for s in self._items if s is not item]
 
@@ -521,7 +524,8 @@ class Layer(Entity):
         self.pause_layer = None
 
         r = layer.get_value("_return")
-        print("returning {}".format(r))
+        # print("returning {}".format(r))
+
         if r:
             self.set_value("_return", r)
 
@@ -568,30 +572,38 @@ class SpawnMetaclass(type):
         return n
 
 
-class GroupsInterface:
+class ItemInterface:
     def __init__(self):
+        self.controller = None
+        self.control_freeze = False
         self.groups = []
+        self.model = None
 
-    def add(self, *groups):
-        for group in groups:
-            group.add(self)
+    def get_value(self, key):
+        if self.model:
+            return self.model.values.get(key)
 
-    def remove(self, *groups):
+    def add_to(self, *groups):
         for group in groups:
-            group.remove(self)
+            group.add_item(self)
+
+    def remove_from(self, *groups):
+        for group in groups:
+            group.remove_item(self)
 
     def kill(self):
         for g in self.groups:
-            self.remove(g)
+            self.remove_from(g)
 
 
-class Sprite(GroupsInterface, Entity, metaclass=SpawnMetaclass):
+class Sprite(ItemInterface, Entity, metaclass=SpawnMetaclass):
     def __init__(self, name, size=(1, 1), position=(0, 0)):
-        GroupsInterface.__init__(self)
+        ItemInterface.__init__(self)
         Entity.__init__(self, name, size, position)
 
         self.sub_sprites = []
-        self.groups = []
+        # self.groups = []
+        # self.controller = None
 
     @property
     def graphics(self):
@@ -619,55 +631,58 @@ class Sprite(GroupsInterface, Entity, metaclass=SpawnMetaclass):
         super(Sprite, self).on_spawn()
         group = self.event.get("group")
         if group:
-            self.add(group)
+            self.add_to(group)
 
     def on_death(self):
         super(Sprite, self).on_death()
-        self.remove(*self.groups)
+        self.remove_from(*self.groups)
 
-    def add(self, *groups):
-        super(Sprite, self).add(*groups)
-
-        for sprite in self.sub_sprites:
-            sprite.add(*groups)
-
-    def remove(self, *groups):
-        super(Sprite, self).remove(*groups)
+    def add_to(self, *groups):
+        super(Sprite, self).add_to(*groups)
 
         for sprite in self.sub_sprites:
-            sprite.remove(*groups)
+            sprite.add_to(*groups)
+
+    def remove_from(self, *groups):
+        super(Sprite, self).remove_from(*groups)
+
+        for sprite in self.sub_sprites:
+            sprite.remove_from(*groups)
 
 
-class Region(GroupsInterface, Entity):
+class Region(ItemInterface, Entity):
     WALL_COLOR = 255, 0, 255
 
     def __init__(self, name, *points, size=(1, 1),
                  position=(0, 0), **kwargs):
 
+        ItemInterface.__init__(self)
         Entity.__init__(self, name, size=size,
                         position=position)
-        GroupsInterface.__init__(self)
         self.name = name
-        self.visible = True
-
-        self.walls = []
         self.position = position
 
-        if points:
-            self.set_walls(points, **kwargs)
+        self.vectors = []
+        self.visible = True
 
-    def set_walls(self, points, **kwargs):
-        self.walls = self.get_walls(points, **kwargs)
+        if points:
+            self.set_vectors(points, **kwargs)
+
+    def add_vector(self, vector):
+        self.vectors.append(vector)
+
+    def set_vectors(self, points, **kwargs):
+        self.vectors = self.get_vectors(points, **kwargs)
 
     @staticmethod
-    def get_walls(points, ground_angle=0.0, orientation=True,
-                  offset=(0, 0), friction=None, closed=True):
+    def get_vectors(points, ground_angle=0.0, orientation=True,
+                    offset=(0, 0), friction=None, closed=True):
         if not orientation:
             points = list(points)
             points.reverse()
             points = tuple(points)
 
-        def get_wall(p1, p2):
+        def get_vector(p1, p2):
             x1, y1 = p1
             x2, y2 = p2
             x1 += offset[0]
@@ -679,31 +694,30 @@ class Region(GroupsInterface, Entity):
                         friction=friction)
 
         last = None
-        walls = []
+        vectors = []
         for point in points:
             if last:
-                walls.append(get_wall(last, point))
+                vectors.append(get_vector(last, point))
 
             last = point
         if closed:
-            walls.append(get_wall(last, points[0]))
+            vectors.append(get_vector(last, points[0]))
 
-        for w in walls:
-            angle = w.get_angle()
-            w.ground = angle <= ground_angle or angle >= 1 - ground_angle
+        for v in vectors:
+            angle = v.get_angle()
+            v.ground = angle <= ground_angle or angle >= 1 - ground_angle
 
-        return walls
+        return vectors
 
-    def draw_walls(self, screen, offset=(0, 0)):
-        for wall in self.walls:
-            wall.draw(
-                screen, offset=offset,
-                color=self.WALL_COLOR)
+    def draw_vectors(self, screen, offset=(0, 0)):
+        for v in self.vectors:
+            v.draw(
+                screen, offset=offset)
 
     def get_collision_system(self, items, check, handle):
         cs = CollisionSystem(
             check, handle,
-            "group", self.walls, items
+            "group", self.vectors, items
         )
 
         return cs

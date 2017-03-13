@@ -1,6 +1,26 @@
+from zs_constants.gui import DPAD
 from zs_constants.zs import DIALOG_POSITION
 from zs_src.entities import Layer
 from zs_src.sprites import menus_gui
+
+
+class CursorLayer(Layer):
+    BASE_MOVEMENT = 5
+
+    def handle_controller(self):
+        super(CursorLayer, self).handle_controller()
+
+        cursor = self.get_value("Cursor")
+
+        if cursor and self.controller:
+            dpad = self.controller.devices[DPAD]
+
+            x, y = dpad.get_direction()
+            move = CursorLayer.BASE_MOVEMENT
+            x *= move
+            y *= move
+
+            cursor.move((x, y))
 
 
 class HeadsUpDisplay(Layer):

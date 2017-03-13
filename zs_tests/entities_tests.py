@@ -197,12 +197,12 @@ class ZsSpriteUnitTest(ZsUnitTest):
         main_sprite = sprites[0]
         main_sprite.sub_sprites = sprites[1:]
 
-        main_sprite.add(group)
+        main_sprite.add_to(group)
         for sprite in sprites:
             assert sprite in group
         l("add ok")
 
-        main_sprite.remove(group)
+        main_sprite.remove_from(group)
         for sprite in sprites:
             assert sprite not in group
         l("remove ok")
@@ -218,7 +218,7 @@ class ZsSpriteUnitTest(ZsUnitTest):
         main_sprite.sub_sprites = sprites[1:]
         spawning, alive, dying, dead = Entity.STATES
 
-        main_sprite.add(group)
+        main_sprite.add_to(group)
         group.update(1)
 
         for sprite in sprites:
@@ -270,7 +270,7 @@ class LayerUnitTest(ZsUnitTest):
                         self.update_called = True
 
                 self.test_sprite = TestSprite("test sprite")
-                self.test_sprite.add(g1)
+                self.test_sprite.add_to(g1)
 
                 class TestSubLayer(Layer):
                     def __init__(self, *args, **kwargs):

@@ -71,7 +71,7 @@ class Event:
     @staticmethod
     def string_to_number(s):
         try:
-            print(s)
+            # print(s)
             num = float(s)
             if num.is_integer():
                 num = int(num)

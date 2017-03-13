@@ -206,7 +206,7 @@ class HitboxLayer(Layer):
 class PhysicsInterface:
     Vector = Vector
 
-    def __init__(self, mass, elasticity):
+    def __init__(self, mass=1, elasticity=0):
         self.mass = mass
         self.elasticity = elasticity
         self.friction = 0.0
@@ -397,7 +397,7 @@ class PhysicsInterface:
     def get_friction_velocity(self):
         v = self.velocity.get_copy()
         friction = v.get_friction_vector(self.friction)
-        v.add(friction)
+        v.add_vector(friction)
 
         return v
 
@@ -410,7 +410,7 @@ class PhysicsInterface:
 
     def apply_acceleration(self):
         self.acceleration = Vector.sum_forces(*self.forces)
-        self.velocity.add(self.acceleration)
+        self.velocity.add_vector(self.acceleration)
         self.velocity.round()
         self.forces = []
 

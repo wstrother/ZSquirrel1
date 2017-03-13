@@ -8,12 +8,20 @@ class Vector:
     VECTOR_COLOR = 255, 255, 255
     DRAW_WIDTH = 5
 
-    def __init__(self, name, i_hat, j_hat):
-        self.origin = 0, 0
-
+    def __init__(self, name, i_hat, j_hat,
+                 origin=(0, 0), color=False):
         self.name = name
+        self.origin = origin
+
         self.i_hat = i_hat
         self.j_hat = j_hat
+
+        self.regions = []
+
+        if color:
+            self.color = color
+        else:
+            self.color = Vector.VECTOR_COLOR
 
     def __repr__(self):
         i = round(self.i_hat, 4)
@@ -26,6 +34,15 @@ class Vector:
     @property
     def position(self):
         return self.origin
+
+    def move(self, value):
+        dx, dy = value
+        ox, oy = self.origin
+
+        ox += dx
+        oy += dy
+
+        self.origin = ox, oy
 
     def round(self):
         if abs(self.i_hat) < .00001:
@@ -51,7 +68,7 @@ class Vector:
         self.i_hat = i
         self.j_hat = j
 
-    def add(self, vector):
+    def add_vector(self, vector):
         c = self.complex + vector.complex
         self.i_hat = c.real
         self.j_hat = c.imag
@@ -130,6 +147,66 @@ class Vector:
 
         return self
 
+    def rotate_around(self, point, angle):
+        px, py = point
+        ox, oy = self.origin
+        dx = ox - px
+        dy = oy - py
+
+        d = Vector("displacement", dx, dy)
+        d.rotate(angle)
+        self.rotate(angle)
+
+        self.origin = d.apply_to_point(point)
+
+    def axis_collision(self, vector):
+        delta = .75 - self.get_angle()
+
+        v = vector.get_copy()
+        v.rotate_around(self.origin, delta)
+
+        y_int = v.get_y_intercept(self.origin)
+
+        if y_int is False:
+            return False
+
+        collision = Vector(
+            "collision", 0, y_int
+        )
+
+        collision.rotate_around(self.origin, -delta)
+
+        return collision.apply_to_point(self.origin)
+
+    def vector_collision(self, vector):
+        axis_collision = self.axis_collision(vector)
+
+        if not axis_collision:
+            return False
+
+        def point_in_bounds(v):
+            x, y = axis_collision
+            sx, sy = v.origin
+            fx, fy = v.apply_to_point(
+                v.origin)
+
+            if fx > sx:
+                x_bound = sx - 1 <= x <= fx + 1
+            else:
+                x_bound = sx + 1 >= x >= fx - 1
+            if fy > sy:
+                y_bound = sy - 1 <= y <= fy + 1
+            else:
+                y_bound = sy + 1 >= y >= fy - 1
+
+            return x_bound and y_bound
+
+        if point_in_bounds(self) and point_in_bounds(vector):
+            return axis_collision
+
+        else:
+            return False
+
     def flip(self):
         self.rotate(.5)
 
@@ -153,7 +230,7 @@ class Vector:
             return compare_angles(
                 t1 - .25, (t2 - .25) % 1)
 
-    def apply_to_point(self, point):
+    def apply_to_point(self, point=(0, 0)):
         x, y = point
         x += self.i_hat
         y += self.j_hat
@@ -161,7 +238,8 @@ class Vector:
         return x, y
 
     def get_copy(self, rotate=0.0, scale=1):
-        v = Vector(self.name, self.i_hat, self.j_hat)
+        v = Vector(self.name, self.i_hat, self.j_hat,
+                   origin=self.origin)
 
         if rotate:
             v.rotate(rotate)
@@ -181,7 +259,7 @@ class Vector:
         i = basis_i.get_copy(scale=self.i_hat)
         j = basis_j.get_copy(scale=self.j_hat)
 
-        v = i.add(j)
+        v = i.add_vector(j)
         v.name = "transformation vector"
         v.round()
 
@@ -230,30 +308,37 @@ class Vector:
 
         return vector
 
-    def get_y_intercept(self, offset):
+    def get_y_intercept(self, offset=(0, 0)):
         if self.i_hat == 0:
             return False
 
         if self.j_hat == 0:
-            return offset[1]
+            return self.origin[1] - offset[1]
 
         slope = self.j_hat / self.i_hat
-        x1, y1 = offset
-        c = y1 - (slope * x1)
-        y0 = 0 - c
+        x0, y0 = self.origin
+        ox, oy = offset
+        x0 -= ox
+        y0 -= oy
 
-        return -1 * y0
+        c = y0 - (slope * x0)
 
-    def draw(self, screen, offset=(0, 0), color=None):
-        if not color:
-            color = self.VECTOR_COLOR
+        return c
+
+    def draw(self, screen, offset=(0, 0)):
+        color = self.color
 
         x, y = offset
+        ox, oy = self.origin
+        ox += x
+        oy += y
+
         dx, dy = self.get_value()
-        dx += x
-        dy += y
+        dx += ox
+        dy += oy
+
         draw.line(screen, color,
-                  (x, y), (dx, dy),
+                  (ox, oy), (dx, dy),
                   self.DRAW_WIDTH)
 
         draw.circle(screen, color,
@@ -291,7 +376,8 @@ class Wall(Vector):
     def end_point(self):
         return self.apply_to_point(self.origin)
 
-    def axis_collision(self, offset, vector):
+    def axis_collision(self, vector):
+        offset = vector.origin
         dx = offset[0] - self.origin[0]
         dy = offset[1] - self.origin[1]
 
@@ -435,13 +521,9 @@ class Wall(Vector):
             sprite.set_on_ground(wall)
 
     def draw(self, screen, offset=(0, 0), color=None):
-        x, y = self.origin
-        x += offset[0]
-        y += offset[1]
-
         super(Wall, self).draw(
             screen, color=color,
-            offset=(x, y))
+            offset=offset)
 
         start = self.origin
 

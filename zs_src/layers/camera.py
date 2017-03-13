@@ -521,7 +521,6 @@ class CameraLayer(Layer):
         window = self.camera_windows[name]
 
         def set_camera():
-            print(rate)
             point = sprite.collision_point
             self.camera.window_track(
                 window, point, rate
@@ -688,7 +687,7 @@ class ParallaxBgLayer(Layer):
 
                 for j in range((sh // h) + 2):
                     oy = y + ((j - 1) * h)
-                    self.graphics.draw_walls(
+                    self.graphics.draw_vectors(
                         screen, offset=(ox, oy))
 
         elif x_wrap:
@@ -701,9 +700,9 @@ class ParallaxBgLayer(Layer):
         elif y_wrap:
             for j in range((sh // h) + 2):
                 oy = y + ((j - 1) * h)
-                self.graphics.draw_walls(
+                self.graphics.draw_vectors(
                     screen, offset=(x, oy))
 
         else:
-            self.graphics.draw_walls(
+            self.graphics.draw_vectors(
                 screen, offset=(x, y))

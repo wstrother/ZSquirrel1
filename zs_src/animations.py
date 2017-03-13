@@ -15,8 +15,7 @@ class AnimationGraphics(Graphics):
 
     @staticmethod
     def get_sprite_sheet(name):
-        path = join(ANIMATIONS, name)
-        sprite_sheet = pygame.image.load(path)
+        sprite_sheet = Graphics.load_image(ANIMATIONS, name)
         sprite_sheet.set_colorkey(sprite_sheet.get_at((0, 0)))
 
         return sprite_sheet
@@ -187,7 +186,6 @@ class StreamManager:
         stream = section.stream
         hitboxes = section.hitboxes
 
-        print(name)
         animation = Animation(
             name, sprite_sheet, stream,
             hitboxes, **kwargs

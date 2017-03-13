@@ -57,7 +57,7 @@ class ContextLayer(Layer):
         super(ContextLayer, self).on_spawn()
 
     def on_pause(self):
-        layer = self.get_value("pause_menu")
+        layer = self.get_layer("Pause Menu")
         layer.copy_controllers(
             self.controllers
         )
@@ -75,7 +75,7 @@ class PauseMenuLayer(ContextLayer):
         a = devices[A]
 
         frame_advance = self.get_value("frame_advance")
-        pause_menu = self.get_value("pause_menu")
+        pause_menu = self.get_layer("Pause Menu")
         pause_ok = not self.paused and not frame_advance and pause_menu
 
         if start.check() and pause_ok:

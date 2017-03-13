@@ -519,3 +519,5 @@ class CollisionSystem:
     def group_collision_system(check, handle, group1, group2):
         for item in group1:
             CollisionSystem.item_group_collision_system(check, handle, item, group2)
+
+
