@@ -735,9 +735,9 @@ class DebugLayer(HeadsUpDisplay):
         block.visible = False
         self.hud_table = block
 
-    def add_hud(self, name, obj, fields, interval=5):
+    def add_hud(self, name, fields, interval=5):
         self.hud_table.add_member_sprite(
-            HudBox(name, obj, fields,
+            HudBox(name, fields,
                    interval=interval)
         )
 
@@ -746,24 +746,19 @@ class DebugLayer(HeadsUpDisplay):
 
 
 class HudBox(ContainerSprite):
-    def __init__(self, name, obj, fields, interval=5, **kwargs):
+    def __init__(self, name, fields, interval=5, **kwargs):
         kwargs.update({"align_h": "c"})
         super(HudBox, self).__init__(
             name + " HUD", title=name,
             **kwargs)
 
-        self.object = obj
         self.interval = interval
-        self.set_up_huds(fields)
-
-    def set_up_huds(self, fields):
-        # hud: (func, [average/changes], dt, maximum
 
         for field in fields:
-            self.add_field(self.object, field)
+            self.add_field(field)
 
-    def add_field(self, obj, field):
-        text_field = HudField(obj, field)
+    def add_field(self, field):
+        text_field = HudField(field)
         self.add_timer(
             "HUD update frequency", self.interval,
             on_switch_off=text_field.set_text,
@@ -777,58 +772,59 @@ class HudField(TextSprite):
     T_STR = "({:3.3f}, {:3.3f})"
     F_STR = "{:3.3f}"
 
-    def __init__(self, obj, field, **kwargs):
+    def __init__(self, field, **kwargs):
         super(HudField, self).__init__("", **kwargs)
 
         self.cache = None
-        self.func = self.get_func(obj, field)
+        self.field = field
 
-    def get_func(self, obj, field):
-        value_name = field[0]
-        func = field[1]
-        lhs = value_name
-        get_text = None
+    def get_text(self):
+        obj, func, args = self.field
+        return func(obj, *args)
 
-        if len(field) == 2:
-            def get_text():
-                value = func(obj)
-
-                return self.get_f_text(
-                    lhs, value)
-
-        else:
-            if field[2] == "average":
-                self.cache = AverageCache(field[3])
-
-                def get_text():
-                    value = func(obj)
-                    self.cache.append(value)
-
-                    return self.get_f_text(
-                        lhs, self.cache[-1])
-
-            elif field[2] == "raw":
-                def get_text():
-                    value = func(obj)
-
-                    return value
-
-            elif field[2] == "changes":
-                self.cache = ChangeCache(field[3])
-
-                def get_text():
-                    value = func(obj)
-                    self.cache.append(value)
-
-                    return self.cache.changes(field[4])
-
-        return get_text
-
-    def update(self):
-        super(HudField, self).update()
+    # def get_func(self):
+    #     value_name = field[0]
+    #     func = field[1]
+    #     lhs = value_name
+    #     get_text = None
+    #
+    #     if len(field) == 2:
+    #         def get_text():
+    #             value = func(obj)
+    #
+    #             return self.get_f_text(
+    #                 lhs, value)
+    #
+    #     else:
+    #         if field[2] == "average":
+    #             self.cache = AverageCache(field[3])
+    #
+    #             def get_text():
+    #                 value = func(obj)
+    #                 self.cache.append(value)
+    #
+    #                 return self.get_f_text(
+    #                     lhs, self.cache[-1])
+    #
+    #         elif field[2] == "raw":
+    #             def get_text():
+    #                 value = func(obj)
+    #
+    #                 return value
+    #
+    #         elif field[2] == "changes":
+    #             self.cache = ChangeCache(field[3])
+    #
+    #             def get_text():
+    #                 value = func(obj)
+    #                 self.cache.append(value)
+    #
+    #                 return self.cache.changes(field[4])
+    #
+    #     return get_text
 
     def set_text(self):
-        self.change_text(self.func())
+        self.change_text(self.get_text())
 
     def get_f_text(self, lhs, value):
         if type(value) is tuple:

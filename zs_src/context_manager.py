@@ -11,7 +11,7 @@ from zs_src.geometry import Vector
 from zs_src.layers.camera import CameraLayer, ParallaxBgLayer
 from zs_src.layers.menus import CursorLayer
 from zs_src.layers.physics import PhysicsLayer
-from zs_src.layers.regions import RegionLayer, VectorFieldLayer, VectorGrid
+from zs_src.layers.regions import RegionLayer, VectorGrid
 from zs_src.regions.platforms import TreePlat
 from zs_src.sprites.sprites import DemoSprite, CursorSprite
 from zs_src.state_machines import SpriteDemoMachine
@@ -313,12 +313,19 @@ class ContextManager:
                     interval = hd.get("interval", 5)
 
                     field_names = [n for n in hd if n not in ("object", "interval")]
-                    fields = [
-                        (n, ) + FIELDS_DICT[n] for n in field_names
-                    ]
+                    fields = []
+                    for n in field_names:
+                        func = FIELDS_DICT[n]
+                        args = []
+                        if type(hd[n]) is not bool:
+                            args = hd[n]
+
+                        fields.append(
+                            (obj, func, args)
+                        )
 
                     layer.add_hud(
-                        value_name, obj, fields,
+                        value_name, fields,
                         interval=interval)
 
     def set_up_commands(self):
@@ -523,7 +530,7 @@ CONTEXT_DICT = {
     "Walls Layer": lambda: RegionLayer(
         "Walls Layer"),
 
-    "Vector Layer": lambda: VectorFieldLayer(
+    "Vector Layer": lambda: RegionLayer(
         "Vector Layer"),
 
     "Debug Layer": lambda: DebugLayer(),
@@ -593,44 +600,9 @@ STEP_DICT = {
 
 
 FIELDS_DICT = {
-    "acceleration": (
-        lambda obj: obj.acceleration.get_value(),
-        "average", 2),
-
-    "velocity": (
-         lambda obj: obj.velocity.get_value(),
-         "average", 2),
-
-    "position": (
-         lambda obj: obj.position,),
-
-    "size": (
-        lambda obj: obj.size,),
-
-    "grounded": (
-         lambda obj: obj.is_grounded(),),
-
-    "focus_point": (
-        lambda obj: obj.focus_point,),
-
-    "collision_point": (
-        lambda obj: obj.collision_point,),
-
-    "dt": (
-        lambda obj: obj.get_value("_dt"),
-        "average", 2),
-
-    "report_cursor": (
-        lambda obj: obj.report_cursor(),
-        "raw"),
-
-    "report_line": (
-        lambda obj: obj.report_line(),
-        "raw"),
-
-    "report_collision": (
-        lambda obj: obj.report_collision(),
-        "raw")
+    "report_vector": lambda obj, key: obj.report_vector(key),
+    "report_line": lambda obj, key: obj.report_line(key),
+    "report_collision": lambda obj, key1, key2: obj.report_collision(key1, key2),
 }
 
 

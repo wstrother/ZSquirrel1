@@ -11,7 +11,7 @@ class RegionLayer(Layer):
     def __init__(self, *args, **kwargs):
         super(RegionLayer, self).__init__(*args, **kwargs)
 
-        self.vectors_visible = False
+        self.vectors_visible = True
 
     @staticmethod
     def get_vectors(group):
@@ -37,15 +37,6 @@ class RegionLayer(Layer):
             if self.vectors_visible:
                 for item in g:
                     item.draw_vectors(screen, offset=offset)
-
-
-class VectorFieldLayer(RegionLayer):
-    def __init__(self, name, **kwargs):
-        super(VectorFieldLayer, self).__init__(name, **kwargs)
-
-        # self.style = Style({"images": {"bg": "test_bg.png"}})
-        # self.graphics = BgGraphics(self)
-        self.vectors_visible = True
 
 
 class VectorGrid(Region):
@@ -165,8 +156,8 @@ class VectorGrid(Region):
             dy = cy - oy
             vector.set_value((dx, dy))
 
-    def report_cursor(self):
-        vector = self.get_value("Cursor Vector")
+    def report_vector(self, key):
+        vector = self.get_value(key)
         origin = self.adjust_coordinates(vector.origin)
         text = [
             "Vector: {:3.1f}i + {:3.1f}j".format(*vector.get_value()),
@@ -175,8 +166,8 @@ class VectorGrid(Region):
 
         return text
 
-    def report_line(self):
-        vector = self.get_value("Cursor Vector")
+    def report_line(self, key):
+        vector = self.get_value(key)
         y_int = vector.get_y_intercept(self.rect.center)
         dx, dy = vector.get_value()
 
@@ -198,9 +189,9 @@ class VectorGrid(Region):
         else:
             return "y = {}x + {}".format(m, c)
 
-    def report_collision(self):
-        c_vector = self.get_value("Cursor Vector")
-        test_vector = self.get_value("Test Vector")
+    def report_collision(self, key1, key2):
+        c_vector = self.get_value(key1)
+        test_vector = self.get_value(key2)
 
         ac = c_vector.axis_collision(test_vector)
         vc = c_vector.vector_collision(test_vector)
