@@ -130,7 +130,7 @@ class DictEditor(Menu):
 
         self.add_event_methods("load_sub_editor", "update_model")
 
-    def populate(self):
+    def on_spawn(self):
         tools = self.tools
         mb = tools.make_main_block()
 
@@ -147,6 +147,8 @@ class DictEditor(Menu):
         )
 
         mb.handle_event("change_linked_value")
+
+        super(DictEditor, self).on_spawn()
 
     def get_value_option(self, value_name):
         value = self.get_value(value_name)
@@ -488,19 +490,20 @@ class PauseMenu(Menu):
     def on_spawn(self):
         tools = self.tools
 
-        mb = tools.make_main_block(position=(200, 200),
-                                   size=(300, 0))
+        mb = tools.make_main_block(
+            position=(200, 200),
+            size=(300, 0))
 
         def in_model(name):
             return (name in self.model.values) and (self.model.values[name])
 
-        self.add_controller_option(mb)
-
-        if in_model("frame_advance"):
-            self.add_frame_advance_option(mb)
-
-        if in_model("items_dict"):
-            self.add_item_options(mb)
+        # self.add_controller_option(mb)
+        #
+        # if in_model("frame_advance"):
+        #     self.add_frame_advance_option(mb)
+        #
+        # if in_model("items_dict"):
+        #     self.add_item_options(mb)
 
         if in_model("layers_dict"):
             ld = self.get_value("layers_dict")
